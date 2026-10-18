@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+__pycache__/
+
+# Private research material: decompiled vendor code, vendor binaries, memory dumps,
+# decrypted device specs. Never publish these.
+work/
+original/
+prior-work/
+
+# Local machine and session files
+.mcp.json
+notes/HANDOFF.md
+
+# RE databases
+*.gpr
+*.rep/
+*.lock
+*.lock~
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
