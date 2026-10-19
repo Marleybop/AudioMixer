@@ -135,14 +135,27 @@ public static class CpuTemperature
         return start < 0 || end < start ? null : WebUtility.HtmlDecode(output[(start + 9)..end]).Trim();
     }
 
-    /// <summary>True if the task is set up and its copy of the app matches the one in <paramref name="appFolder"/>.</summary>
-    public static bool TaskIsCurrent(string appFolder, string exeName)
+    /// <summary>
+    /// The files that make up the app at <paramref name="exePath"/>: just the exe for a single-file build (which may sit
+    /// in Downloads next to anything), or its whole build folder when the app's DLL is next to it.
+    /// </summary>
+    static List<string> AppFiles(string exePath)
     {
-        if (!string.Equals(TaskCommand(), Path.Combine(InstallFolder, exeName), StringComparison.OrdinalIgnoreCase))
+        var folder = Path.GetDirectoryName(exePath)!;
+        return File.Exists(Path.ChangeExtension(exePath, ".dll"))
+            ? Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).ToList()
+            : [exePath];
+    }
+
+    /// <summary>True if the task is set up and its copy of the app matches the app at <paramref name="exePath"/>.</summary>
+    public static bool TaskIsCurrent(string exePath)
+    {
+        if (!string.Equals(TaskCommand(), Path.Combine(InstallFolder, Path.GetFileName(exePath)), StringComparison.OrdinalIgnoreCase))
             return false;
-        return Directory.EnumerateFiles(appFolder)
+        var folder = Path.GetDirectoryName(exePath)!;
+        return AppFiles(exePath)
             .Where(f => Path.GetExtension(f).ToLowerInvariant() is ".dll" or ".exe" or ".json")
-            .All(f => SameFile(f, Path.Combine(InstallFolder, Path.GetFileName(f))));
+            .All(f => SameFile(f, Path.Combine(InstallFolder, Path.GetRelativePath(folder, f))));
     }
 
     static bool SameFile(string a, string b)
@@ -162,21 +175,22 @@ public static class CpuTemperature
     }
 
     /// <summary>
-    /// Copies the app in <paramref name="appFolder"/> to <see cref="InstallFolder"/> and sets up the task that runs
+    /// Copies the app at <paramref name="exePath"/> to <see cref="InstallFolder"/> and sets up the task that runs
     /// that copy elevated with <paramref name="arguments"/>, on demand only. Run as administrator.
     /// </summary>
-    public static bool InstallTask(string appFolder, string exeName, string arguments)
+    public static bool InstallTask(string exePath, string arguments)
     {
         Schtasks($"/End /TN \"{TaskName}\""); // a running reader holds its files
+        var folder = Path.GetDirectoryName(exePath)!;
         for (var attempt = 0; ; attempt++)
         {
             try
             {
                 if (Directory.Exists(InstallFolder))
                     Directory.Delete(InstallFolder, recursive: true);
-                foreach (var source in Directory.EnumerateFiles(appFolder, "*", SearchOption.AllDirectories))
+                foreach (var source in AppFiles(exePath))
                 {
-                    var target = Path.Combine(InstallFolder, Path.GetRelativePath(appFolder, source));
+                    var target = Path.Combine(InstallFolder, Path.GetRelativePath(folder, source));
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                     File.Copy(source, target);
                 }
@@ -210,7 +224,7 @@ public static class CpuTemperature
               </Settings>
               <Actions Context="Author">
                 <Exec>
-                  <Command>{SecurityElement.Escape(Path.Combine(InstallFolder, exeName))}</Command>
+                  <Command>{SecurityElement.Escape(Path.Combine(InstallFolder, Path.GetFileName(exePath)))}</Command>
                   <Arguments>{SecurityElement.Escape(arguments)}</Arguments>
                 </Exec>
               </Actions>

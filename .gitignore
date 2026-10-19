@@ -27,3 +27,6 @@ notes/HANDOFF.md
 *.id2
 *.nam
 *.til
+
+# Release builds (tools/publish.ps1)
+dist/

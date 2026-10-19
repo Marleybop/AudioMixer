@@ -1,0 +1,8 @@
+<Project>
+  <!-- One version for the app, engine and CLI. Bump it here, add a CHANGELOG entry, then tag vX.Y.Z. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Marley</Authors>
+    <Copyright>Copyright (c) 2026 Marley</Copyright>
+  </PropertyGroup>
+</Project>

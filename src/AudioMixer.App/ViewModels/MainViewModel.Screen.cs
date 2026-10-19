@@ -310,7 +310,7 @@ public sealed partial class MainViewModel
             return;
         }
         var exe = Environment.ProcessPath!;
-        if (!await Task.Run(() => Core.Stats.CpuTemperature.TaskIsCurrent(AppContext.BaseDirectory, Path.GetFileName(exe))))
+        if (!await Task.Run(() => Core.Stats.CpuTemperature.TaskIsCurrent(exe)))
         {
             try
             {

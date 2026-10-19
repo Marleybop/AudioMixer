@@ -35,6 +35,11 @@ public sealed partial class MainViewModel : ObservableObject
     bool _loadingHeadset;
     bool _lowBatteryNotified;
 
+    /// <summary>"Version 0.1.0", from the build (src/Directory.Build.props).</summary>
+    public static string AppVersion { get; } = "Version " + (System.Reflection.Assembly.GetEntryAssembly()
+        ?.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "?");
+
     /// <summary>Raised when the user should be told something (tray balloon).</summary>
     public event EventHandler<(string Title, string Message)>? Notify;
 

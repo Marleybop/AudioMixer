@@ -10,7 +10,6 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>AudioMixer</AssemblyName>
     <Product>AudioMixer</Product>
-    <Version>0.1.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Drawn by tools/make_icon.py -->
     <ApplicationIcon>Assets\AudioMixer.ico</ApplicationIcon>
