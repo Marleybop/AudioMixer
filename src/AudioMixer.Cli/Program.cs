@@ -85,6 +85,17 @@ switch (command)
             Console.WriteLine("restored");
         }
         break;
+    case "driver-restore":
+        // driver-restore <backup folder>: reinstall Sonar's virtual audio driver from exported packages (run as administrator)
+        Console.WriteLine(SonarDriverInstaller.Install(args[1]));
+        break;
+    case "driver-status":
+        Console.WriteLine(SonarEngine.TryCreate(out var engineError) is { } probe
+            ? $"Sonar engine API: {probe.LibraryPath}"
+            : $"Sonar engine API: {engineError}");
+        foreach (var e in endpoints.GetAll().Where(e => e.SonarChannel is not null || e.DisplayName.Contains("Sonar")))
+            Console.WriteLine($"{e.Flow,-6} {e.State,-10} {e.DisplayName}");
+        break;
     case "presets":
         foreach (var group in SonarPresets.Load().GroupBy(p => p.Channel))
             Console.WriteLine($"{group.Key}: {group.Count()} presets, selected: {string.Join(", ", group.Where(p => p.IsSelectedInSonar).Select(p => p.Name))}\n  "

@@ -111,7 +111,7 @@ public sealed class OledWidget
         }
         var frame = ToFrame(Render());
         Rendered?.Invoke(this, Preview(frame));
-        if (_mode == ScreenMode.BaseStation || !_headset.IsConnected)
+        if (_mode == ScreenMode.BaseStation || !_headset.IsConnected || ScreenBorrowed())
             return;
         if (!force && frame.SameAs(_last))
             return;
@@ -127,7 +127,19 @@ public sealed class OledWidget
         });
     }
 
-    BitmapSource Render()
+    /// <summary>
+    /// Another tool can borrow the screen by holding a named mutex "AudioMixer.OledBusy" in the same session;
+    /// AudioMixer stops drawing until it's released.
+    /// </summary>
+    static bool ScreenBorrowed()
+    {
+        if (!Mutex.TryOpenExisting("AudioMixer.OledBusy", out var mutex))
+            return false;
+        mutex.Dispose();
+        return true;
+    }
+
+        BitmapSource Render()
     {
         var visual = new DrawingVisual();
         TextOptions.SetTextRenderingMode(visual, TextRenderingMode.Aliased);

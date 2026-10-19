@@ -54,7 +54,7 @@ public sealed class SonarEngine : IDisposable
     /// <summary>Finds the installed Sonar APO API and opens every channel repository.</summary>
     public static SonarEngine? TryCreate(out string? error)
     {
-        var path = CandidatePaths.FirstOrDefault(File.Exists);
+        var path = CandidatePaths.FirstOrDefault(File.Exists) ?? FindInDriverStore();
         if (path is null)
         {
             error = "Sonar.APOAPI.dll not found (Sonar's virtual audio driver package is not installed).";
@@ -68,6 +68,27 @@ public sealed class SonarEngine : IDisposable
         catch (Exception e)
         {
             error = $"Failed to open Sonar APO API: {e.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The Sonar APO driver package carries its own copy of the API, so it can be used even when the GG app folder is
+    /// gone (e.g. GG uninstalled with the driver kept). Newest package first.
+    /// </summary>
+    static string? FindInDriverStore()
+    {
+        try
+        {
+            var store = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "DriverStore", "FileRepository");
+            return Directory.EnumerateDirectories(store, "sonar.apo.inf_amd64_*")
+                .Select(d => Path.Combine(d, "Sonar.APOAPI.dll"))
+                .Where(File.Exists)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+        }
+        catch (Exception)
+        {
             return null;
         }
     }
