@@ -101,7 +101,7 @@ public sealed class HeadsetConfig
     /// <summary>Notify when the headset battery drops to or below this percent (0 = off).</summary>
     public int LowBatteryWarningPercent { get; set; } = 25;
 
-    /// <summary>What the base station's screen shows: BaseStation (its own), Off, Widget, Stats, Weather, Cycle or Custom.</summary>
+    /// <summary>What the base station's screen shows: BaseStation (its own), Off, Widget, Stats, Weather, Clock, Cycle or Custom.</summary>
     public string Screen { get; set; } = "BaseStation";
 
     /// <summary>The picture or GIF (file name in the Screens folder) shown when <see cref="Screen"/> is Custom.</summary>
@@ -120,4 +120,10 @@ public sealed class HeadsetConfig
 
     /// <summary>Show the CPU temperature on the stats page (needs PawnIO and the elevated reader's task).</summary>
     public bool CpuTemperature { get; set; }
+
+    /// <summary>The clock page: "Windows" (as Windows is set), "12" or "24" hour.</summary>
+    public string ClockFormat { get; set; } = "Windows";
+
+    /// <summary>Show the seconds on the clock page.</summary>
+    public bool ClockSeconds { get; set; }
 }

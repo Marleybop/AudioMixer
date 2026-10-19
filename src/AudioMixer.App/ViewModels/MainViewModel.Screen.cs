@@ -30,7 +30,8 @@ public sealed partial class MainViewModel
         new(ScreenMode.Widget, "Headset widget", "Battery, mic and volume"),
         new(ScreenMode.Stats, "PC stats", "CPU and GPU load and temperature, memory"),
         new(ScreenMode.Weather, "Weather", "Now and today, for your town"),
-        new(ScreenMode.Cycle, "Take turns", $"Widget, stats and weather, {OledWidget.CycleTime.TotalSeconds:0} s each"),
+        new(ScreenMode.Clock, "Clock", "The time and date"),
+        new(ScreenMode.Cycle, "Take turns", $"Clock, widget, stats and weather, {OledWidget.CycleTime.TotalSeconds:0} s each"),
         new(ScreenMode.Custom, "Picture or animation", "PNG, JPG or GIF from your Screens folder"),
     ];
 
@@ -38,6 +39,8 @@ public sealed partial class MainViewModel
         [new(0, "Never"), new(5, "5 min"), new(15, "15 min"), new(30, "30 min"), new(60, "1 hour"), new(120, "2 hours")];
 
     public static IReadOnlyList<Option> TemperatureUnitOptions { get; } = [new(false, "°C"), new(true, "°F")];
+
+    public static IReadOnlyList<Option> ClockFormatOptions { get; } = [new("Windows", "As Windows"), new("12", "12-hour"), new("24", "24-hour")];
 
     public static string WeatherCredit => OpenMeteo.Credit;
     public static string WeatherCreditUrl => OpenMeteo.CreditUrl;
@@ -66,6 +69,10 @@ public sealed partial class MainViewModel
         _oled.AnimateWeather = _weatherAnimated;
         _cpuTemperature = config.CpuTemperature && Core.Stats.CpuTemperature.PawnIOInstalled;
         _feeds.CpuTemperature = _cpuTemperature;
+        _clockFormat = ClockFormatOptions.Any(o => (string)o.Value == config.ClockFormat) ? config.ClockFormat : "Windows";
+        _clockSeconds = config.ClockSeconds;
+        _oled.Clock24Hour = Clock24Hour(_clockFormat);
+        _oled.ClockSeconds = _clockSeconds;
         _feeds.SetWeatherPlace(_weatherPlace, _weatherFahrenheit);
         _oled.UpdateWeather(null, _weatherPlace?.ShortName, _weatherPlace is null ? "Pick a town in AudioMixer" : null);
         RefreshScreenImages();
@@ -84,6 +91,7 @@ public sealed partial class MainViewModel
     public bool IsCustomScreen => ScreenMode == ScreenMode.Custom;
     public bool ShowsStats => ScreenMode is ScreenMode.Stats or ScreenMode.Cycle;
     public bool ShowsWeather => ScreenMode is ScreenMode.Weather or ScreenMode.Cycle;
+    public bool ShowsClock => ScreenMode is ScreenMode.Clock or ScreenMode.Cycle;
     public string ScreenSleepText => _oled.IsAsleep ? "Asleep now. Use the keyboard, mouse or dial to wake it." : "";
 
     partial void OnScreenModeChanged(ScreenMode value)
@@ -91,6 +99,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(IsCustomScreen));
         OnPropertyChanged(nameof(ShowsStats));
         OnPropertyChanged(nameof(ShowsWeather));
+        OnPropertyChanged(nameof(ShowsClock));
         _oled.Mode = value;
         UpdateFeeds();
         QueueSave();
@@ -99,7 +108,8 @@ public sealed partial class MainViewModel
             ScreenMode.Widget => "The base station now shows battery, mic and volume",
             ScreenMode.Stats => "The base station now shows your PC's stats",
             ScreenMode.Weather => WeatherPlace is null ? "Pick a town for the weather" : $"The base station now shows the weather in {WeatherPlace.ShortName}",
-            ScreenMode.Cycle => "The base station now takes turns: widget, stats and weather",
+            ScreenMode.Clock => "The base station now shows the time",
+            ScreenMode.Cycle => "The base station now takes turns: clock, widget, stats and weather",
             ScreenMode.Off => "The base station's screen is off while AudioMixer runs",
             ScreenMode.Custom => ScreenImages.Count == 0 ? "Put a picture or GIF in the Screens folder first" : $"The base station now shows {SelectedScreenImage}",
             _ => "The base station shows its own screen again",
@@ -263,6 +273,27 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(WeatherStatus));
         QueueSave();
         Toast(toast);
+    }
+
+    // ---- Clock ----
+
+    [ObservableProperty] string _clockFormat = "Windows";
+    [ObservableProperty] bool _clockSeconds;
+
+    static bool? Clock24Hour(string format) => format switch { "24" => true, "12" => false, _ => null };
+
+    partial void OnClockFormatChanged(string value)
+    {
+        _oled.Clock24Hour = Clock24Hour(value);
+        QueueSave();
+        Toast(value switch { "24" => "24-hour clock", "12" => "12-hour clock", _ => "The clock follows Windows' time format" });
+    }
+
+    partial void OnClockSecondsChanged(bool value)
+    {
+        _oled.ClockSeconds = value;
+        QueueSave();
+        Toast(value ? "The clock shows seconds" : "The clock hides seconds");
     }
 
     // ---- CPU temperature ----

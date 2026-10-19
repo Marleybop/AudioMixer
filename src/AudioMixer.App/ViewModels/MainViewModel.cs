@@ -961,6 +961,8 @@ public sealed partial class MainViewModel : ObservableObject
                 WeatherFahrenheit = WeatherFahrenheit,
                 WeatherAnimated = WeatherAnimated,
                 CpuTemperature = CpuTemperature,
+                ClockFormat = ClockFormat,
+                ClockSeconds = ClockSeconds,
             },
             Channels = old.Channels,
         };

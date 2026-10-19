@@ -1047,6 +1047,14 @@
                                                 </TextBlock>
                                             </StackPanel>
 
+                                            <!-- Clock -->
+                                            <StackPanel Visibility="{Binding ShowsClock, Converter={StaticResource BoolToVis}}" Margin="0,14,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                                <TextBlock Text="Clock" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                                                <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ClockFormatOptions}" SelectedValue="{Binding ClockFormat}"
+                                                         AutomationProperties.Name="Clock format"/>
+                                                <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="Show seconds" IsChecked="{Binding ClockSeconds}" Margin="0,14,0,0"/>
+                                            </StackPanel>
+
                                             <!-- Weather -->
                                             <StackPanel Visibility="{Binding ShowsWeather, Converter={StaticResource BoolToVis}}" Margin="0,14,0,0" MaxWidth="420" HorizontalAlignment="Left">
                                                 <DockPanel>
