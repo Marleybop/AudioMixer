@@ -153,10 +153,20 @@ public class LevelBar : FrameworkElement
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
-        if (IsReadOnly)
+        // In a page that scrolls, the wheel scrolls the page unless you've clicked into this bar first;
+        // otherwise scrolling past a bar would quietly change its setting.
+        if (IsReadOnly || (!IsKeyboardFocused && InScrollingPage()))
             return;
         SetClamped(Value + Math.Sign(e.Delta) * SmallChange);
         e.Handled = true;
+    }
+
+    bool InScrollingPage()
+    {
+        for (DependencyObject? d = VisualTreeHelper.GetParent(this); d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is ScrollViewer { ScrollableHeight: > 0 })
+                return true;
+        return false;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

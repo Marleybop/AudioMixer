@@ -4,16 +4,20 @@ My lightweight replacement for the SteelSeries GG / Sonar apps, for the **Arctis
 
 GG and Sonar use over a gigabyte of RAM between them and kept falling over on me, so I replaced the apps. AudioMixer keeps the parts that already work well: the Sonar virtual audio driver and the Sonar audio engine that GG installs.
 
-> Work in progress. Routing, ChatMix, the mic and the headset settings all work on my setup. The Apps and EQ pages are next.
+> Work in progress. Routing, ChatMix, the mic, EQ and effects, and the headset settings all work on my setup. Per-app routing (an Apps page) is next.
 
 ## What it does
 
 - **Channels:** Game, Chat, Media, Aux and Mic, using Sonar's virtual devices. Apps play to a channel, and every channel goes to your real output.
+- **EQ and effects per channel**, the same as Sonar's: a 10-band parametric EQ you drag on a graph, bass/voice/treble boosts,
+  spatial audio, volume boost and smart volume on Game, Media and Aux; ClearCast AI noise cancelling, echo cancelling, noise reduction,
+  noise gate and compressor on Chat and Mic. Sonar's preset library (and anything you saved in Sonar) shows up, and you can save your own.
+- **Each channel can play on its own device**, or follow your priority list.
 - **ChatMix:** the dial on the base station balances Game against Chat, the same as in Sonar.
 - **Device priority:** the headset is used while it's switched on. When you turn it off, audio moves to the next device in your list in about 150 ms.
 - **Blocklist:** keeps devices like a controller's speaker and mic disabled, so they can't take over as the default.
 - **Mic:** your headset mic goes to the virtual "Sonar - Microphone" that Discord and games record from, with its own volume and mute.
-- **Headset settings:** base station EQ, sidetone, mic volume, screen and mute light brightness, Bluetooth, sleep timer, battery and status, all talking straight to the base station.
+- **Headset settings:** base station EQ, sidetone, mic volume, line out and stream mix, screen and mute light brightness, Bluetooth, sleep timer, battery, firmware and status, all talking straight to the base station.
 - Runs from the tray, no admin rights needed.
 
 ## Requirements

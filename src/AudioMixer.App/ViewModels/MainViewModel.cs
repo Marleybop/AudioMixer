@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AudioMixer.App.Services;
 using AudioMixer.Core.Audio;
@@ -24,6 +25,9 @@ public sealed partial class MainViewModel : ObservableObject
     readonly DispatcherTimer _flashDebounce;
     readonly DispatcherTimer _meterTimer;
     readonly DispatcherTimer _appsTimer;
+    readonly DispatcherTimer _headsetReload;
+    readonly DispatcherTimer _soundSave;
+    readonly PresetStore _presets = new();
     readonly List<ChannelStripViewModel> _allStrips = [];
     bool _loadingHeadset;
     bool _lowBatteryNotified;
@@ -43,6 +47,10 @@ public sealed partial class MainViewModel : ObservableObject
         _meterTimer.Tick += (_, _) => UpdateMeters();
         _appsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _appsTimer.Tick += (_, _) => UpdateApps();
+        // Settings changed on the base station's own menu arrive one push at a time; re-read once they settle.
+        _headsetReload = Debounce(400, () => _ = LoadHeadsetSettingsAsync());
+        // EQ edits only need writing to disk; the router doesn't care about them.
+        _soundSave = Debounce(800, () => Try(() => _host.Config.Save()));
 
         if (host.Sonar is { } sonar)
         {
@@ -61,6 +69,8 @@ public sealed partial class MainViewModel : ObservableObject
             }
         };
         _allStrips.Add(MicStrip);
+        if (host.Sonar is { } engine)
+            CreateSounds(engine);
         for (var i = 0; i < 10; i++)
             EqBands.Add(new EqBandViewModel(EqBandLabels[i], OnEqBandChanged));
 
@@ -84,9 +94,11 @@ public sealed partial class MainViewModel : ObservableObject
         });
         host.Headset.ChatMixChanged += (_, d) => _ui.BeginInvoke(() => SetChatMixFromDial(d.Game, d.Chat));
         host.Headset.VolumeChanged += (_, v) => _ui.BeginInvoke(() => HeadsetVolume = v);
+        host.Headset.SettingsChanged += (_, _) => _ui.BeginInvoke(() => Restart(_headsetReload));
         host.ActiveChanged += (_, _) => _ui.BeginInvoke(() =>
         {
             UpdateActivation();
+            ApplyAllSounds();
             if (host.Router is { } router)
                 router.StateChanged += (_, s) => _ui.BeginInvoke(() => UpdateRoute(s));
         });
@@ -96,6 +108,63 @@ public sealed partial class MainViewModel : ObservableObject
         BaseStationConnected = host.Headset.IsConnected;
         if (BaseStationConnected)
             _ = LoadHeadsetSettingsAsync();
+        if (host.IsActive)
+            ApplyAllSounds();
+    }
+
+    // ===== Sound (EQ and effects) =====
+
+    /// <summary>One per channel, in mixer order; the EQ page edits <see cref="SelectedSound"/>.</summary>
+    public ObservableCollection<ChannelSoundViewModel> Sounds { get; } = [];
+    [ObservableProperty] ChannelSoundViewModel? _selectedSound;
+    /// <summary>The page shown: 0 Mixer, 1 EQ, 2 Devices, 3 Headset, 4 Settings.</summary>
+    [ObservableProperty] int _selectedTab;
+
+    void CreateSounds(SonarEngine sonar)
+    {
+        var sonarPresets = SonarPresets.Load();
+        var firstRun = false;
+        foreach (var strip in _allStrips)
+        {
+            var config = _host.Config.ForChannel(strip.Channel);
+            if (config.Sound is null)
+            {
+                // First run: carry over exactly what Sonar had set, under the name Sonar showed.
+                firstRun = true;
+                try { config.Sound = SoundApo.FromApo(sonar, strip.Channel); }
+                catch (Exception) { config.Sound = SoundSettings.Flat(strip.Channel); }
+                var selected = sonarPresets.FirstOrDefault(p => p.Channel == strip.Channel && p.IsSelectedInSonar);
+                config.PresetName = selected?.Name ?? "Custom";
+                config.Modified = false;
+            }
+            var color = new SolidColorBrush(ChannelStripViewModel.ColorOf(strip.Channel));
+            color.Freeze();
+            var sound = new ChannelSoundViewModel(strip.Channel, strip.Name, color, config, _presets, sonarPresets,
+                (channel, settings) => Try(() => sonar.ApplySound(channel, settings)), () => Restart(_soundSave));
+            strip.Sound = sound;
+            Sounds.Add(sound);
+        }
+        SelectedSound = Sounds.FirstOrDefault();
+        if (firstRun)
+            Try(() => _host.Config.Save());
+    }
+
+    /// <summary>Makes the engine match every channel's saved sound (when we take over from GG, or start in control).</summary>
+    void ApplyAllSounds()
+    {
+        if (!_host.IsActive || _host.Sonar is not { } sonar)
+            return;
+        foreach (var sound in Sounds)
+            Try(() => sonar.ApplySound(sound.Channel, _host.Config.ForChannel(sound.Channel).Sound!, force: true));
+    }
+
+    [RelayCommand]
+    void OpenSound(ChannelStripViewModel? strip)
+    {
+        if (strip?.Sound is null)
+            return;
+        SelectedSound = strip.Sound;
+        SelectedTab = 1;
     }
 
     DispatcherTimer Debounce(int milliseconds, Action action)
@@ -194,7 +263,12 @@ public sealed partial class MainViewModel : ObservableObject
         SonarAvailable = _host.Sonar is not null;
         SonarStatus = _host.Sonar is not null ? "Sonar audio engine available" : _host.SonarError ?? "Sonar not available";
         if (!IsActive)
+        {
             OutputName = InputName = "set by SteelSeries GG";
+            _autoOutput.Label = _autoInput.Label = "Automatic";
+            foreach (var strip in _allStrips)
+                strip.DeviceName = "Set by SteelSeries GG";
+        }
         foreach (var strip in _allStrips) strip.Refresh();
     }
 
@@ -257,6 +331,11 @@ public sealed partial class MainViewModel : ObservableObject
         OutputName = s.Output?.Name ?? "None available";
         InputName = s.Input?.Name ?? "None available";
         Problems = string.Join("\n", s.Problems);
+        _autoOutput.Label = $"Automatic · {OutputName}";
+        _autoInput.Label = $"Automatic · {InputName}";
+        foreach (var strip in _allStrips)
+            strip.DeviceName = strip.IsMic ? InputName
+                : s.ChannelOutputs.TryGetValue(strip.Channel, out var o) ? o?.Name ?? "None available" : OutputName;
         foreach (var d in OutputDevices) d.IsCurrent = d.Id == s.Output?.Id;
         foreach (var d in InputDevices) d.IsCurrent = d.Id == s.Input?.Id;
     }
@@ -301,7 +380,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var strip in Channels)
         {
             var apps = _monitor.GetApps(strip.Channel);
-            strip.Apps = strip.IsMic ? InputName : apps.Count == 0 ? "No apps playing" : string.Join(", ", apps);
+            strip.Apps = strip.IsMic ? "Apps record this as “Sonar - Microphone”" : apps.Count == 0 ? "No apps playing" : string.Join(", ", apps);
         }
     }
 
@@ -309,8 +388,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] double _chatMix;
     bool _chatMixFromDial;
 
-    public int ChatMixGamePercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Game * 100);
-    public int ChatMixChatPercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Chat * 100);
+    // With ChatMix off both stay at full volume, whatever the dial says.
+    public int ChatMixGamePercent => ChatMixEnabled ? (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Game * 100) : 100;
+    public int ChatMixChatPercent => ChatMixEnabled ? (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Chat * 100) : 100;
 
     void SetChatMixFromDial(int game, int chat)
     {
@@ -330,7 +410,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] bool _chatMixEnabled;
 
-    partial void OnChatMixEnabledChanged(bool value) => QueueSave();
+    partial void OnChatMixEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ChatMixGamePercent));
+        OnPropertyChanged(nameof(ChatMixChatPercent));
+        QueueSave();
+    }
 
     [RelayCommand]
     void ToggleMicMute() => MicStrip.Muted = !MicStrip.Muted;
@@ -345,7 +430,43 @@ public sealed partial class MainViewModel : ObservableObject
         var all = _host.Endpoints.GetAll().Where(e => !e.IsVirtual).ToList();
         Sync(OutputDevices, _host.Config.OutputPriority, all.Where(e => e.Flow == EndpointFlow.Output).ToList(), EndpointFlow.Output);
         Sync(InputDevices, _host.Config.InputPriority, all.Where(e => e.Flow == EndpointFlow.Input).ToList(), EndpointFlow.Input);
+        RefreshDeviceChoices(all);
         UpdateRoute(_host.Router?.State);
+    }
+
+    readonly DeviceChoice _autoOutput = new(null, "Automatic");
+    readonly DeviceChoice _autoInput = new(null, "Automatic");
+
+    /// <summary>Rebuilds each strip's device picker: Automatic, then the usable devices (plus the pinned one if it's away).</summary>
+    void RefreshDeviceChoices(List<AudioEndpoint> all)
+    {
+        List<DeviceChoice> Build(EndpointFlow flow, DeviceChoice auto, DeviceRef? pinned)
+        {
+            var list = new List<DeviceChoice> { auto };
+            list.AddRange(all.Where(e => e.Flow == flow && e.State == EndpointState.Active && !_host.Config.Blocked.Any(b => b.Id == e.Id))
+                .OrderBy(e => e.DisplayName).Select(e => new DeviceChoice(e.Id, e.DisplayName)));
+            if (pinned is not null && list.All(c => c.Id != pinned.Id))
+                list.Add(new DeviceChoice(pinned.Id, $"{pinned.Name} (not connected)"));
+            return list;
+        }
+
+        foreach (var strip in _allStrips)
+        {
+            var pinned = _host.Config.ForChannel(strip.Channel).Device;
+            strip.DeviceChoices = strip.IsMic ? Build(EndpointFlow.Input, _autoInput, pinned) : Build(EndpointFlow.Output, _autoOutput, pinned);
+            strip.ShowDevice(strip.DeviceChoices.FirstOrDefault(c => c.Id == pinned?.Id) ?? strip.DeviceChoices[0]);
+            strip.DeviceChosen -= OnStripDeviceChosen;
+            strip.DeviceChosen += OnStripDeviceChosen;
+        }
+    }
+
+    void OnStripDeviceChosen(object? sender, EventArgs e)
+    {
+        if (sender is not ChannelStripViewModel { SelectedDevice: { } choice } strip)
+            return;
+        _host.Config.ForChannel(strip.Channel).Device = choice.Id is null ? null
+            : new DeviceRef(choice.Id, choice.Label.Replace(" (not connected)", ""));
+        SaveConfig();
     }
 
     /// <summary>Endpoint ids encode their direction: render ids start {0.0.0…}, capture ids {0.0.1…}.</summary>
@@ -462,6 +583,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] int _sleepAfterMinutes;
     [ObservableProperty] bool _rangeMode;
     [ObservableProperty] string _baseInput = "—";
+    [ObservableProperty] int _streamMain = 100;
+    [ObservableProperty] int _streamAux = 100;
+    [ObservableProperty] int _streamMic = 100;
+    [ObservableProperty] string _firmwareText = "";
+    public bool IsStreamMix => LineOut == LineOutMode.StreamMix;
     [ObservableProperty] int _lowBatteryWarning;
     [ObservableProperty] IReadOnlyList<StatusRow> _statusRows = [];
 
@@ -471,6 +597,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var a = await _host.Headset.GetAudioSettingsAsync();
             var ux = await _host.Headset.GetUxSettingsAsync();
+            var firmware = await _host.Headset.GetFirmwareAsync();
             _loadingHeadset = true;
             for (var i = 0; i < 10; i++)
                 EqBands[i].Gain = a.CustomEqDb[i];
@@ -484,6 +611,12 @@ public sealed partial class MainViewModel : ObservableObject
             Brightness = Math.Clamp(ux.Brightness, 1, 10);
             DimAfterMinutes = ux.DimAfterMinutes;
             SimpleHomeScreen = ux.SimpleHomeScreen;
+            StreamMain = a.StreamMain;
+            StreamAux = a.StreamAux;
+            StreamMic = a.StreamMic;
+            FirmwareText = string.IsNullOrEmpty(firmware.HeadsetMcu)
+                ? $"base {firmware.BaseMcu}"
+                : $"base {firmware.BaseMcu} · headset {firmware.HeadsetMcu}";
         }
         catch (Exception)
         {
@@ -515,6 +648,7 @@ public sealed partial class MainViewModel : ObservableObject
             new("Transparency level", $"{s.TransparencyLevel} / 10"),
             new("Volume (dial)", $"{HeadsetVolume} / {BaseAudioSettings.MaxVolume}"),
             new("Input", BaseInput),
+            new("Firmware", FirmwareText),
         ];
     }
 
@@ -563,7 +697,15 @@ public sealed partial class MainViewModel : ObservableObject
         if (value < 1) MicVolume = 1;
         else SendSetting(() => _host.Headset.SetMicVolume(value));
     }
-    partial void OnLineOutChanged(LineOutMode value) => SendSetting(() => _host.Headset.SetLineOutMode(value));
+    partial void OnLineOutChanged(LineOutMode value)
+    {
+        OnPropertyChanged(nameof(IsStreamMix));
+        SendSetting(() => _host.Headset.SetLineOutMode(value));
+    }
+    partial void OnStreamMainChanged(int value) => SendStreamMix();
+    partial void OnStreamAuxChanged(int value) => SendStreamMix();
+    partial void OnStreamMicChanged(int value) => SendStreamMix();
+    void SendStreamMix() => SendSetting(() => _host.Headset.SetStreamMix(StreamMain, StreamAux, StreamMic));
     partial void OnBrightnessChanged(int value)
     {
         if (value < 1) Brightness = 1;
@@ -646,6 +788,7 @@ public sealed partial class MainViewModel : ObservableObject
             ChatMixEnabled = ChatMixEnabled,
             MixerChannels = ChannelToggles.Where(t => t.IsShown).Select(t => t.Channel).ToList(),
             Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning },
+            Channels = old.Channels,
         };
         _host.SaveConfig(config);
         if (_host.Sonar is { } sonar && IsActive)

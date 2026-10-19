@@ -21,7 +21,6 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     readonly Action<float> _setGain;
     readonly Func<bool> _getMute;
     readonly Action<bool> _setMute;
-    readonly Func<bool?> _getEq;
     readonly bool _squareLaw;
     bool _loading;
 
@@ -36,10 +35,35 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     /// <summary>Live peak 0–100.</summary>
     [ObservableProperty] double _peak;
     [ObservableProperty] string _apps = "";
-    [ObservableProperty] string _eqText = "";
+
+    /// <summary>The channel's EQ and effects (null when the Sonar engine isn't available).</summary>
+    public ChannelSoundViewModel? Sound { get; set; }
+
+    /// <summary>Devices this channel can be pinned to; the first entry is "Automatic" (follow the priority list).</summary>
+    [ObservableProperty] IReadOnlyList<DeviceChoice> _deviceChoices = [];
+    [ObservableProperty] DeviceChoice? _selectedDevice;
+    /// <summary>Where the channel actually plays (or, for the mic, which mic feeds it).</summary>
+    [ObservableProperty] string _deviceName = "";
+
+    /// <summary>Raised when you pick a different device for this channel.</summary>
+    public event EventHandler? DeviceChosen;
+
+    partial void OnSelectedDeviceChanged(DeviceChoice? value)
+    {
+        if (!_loading && value is not null)
+            DeviceChosen?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Selects a device without raising <see cref="DeviceChosen"/>.</summary>
+    public void ShowDevice(DeviceChoice? choice)
+    {
+        _loading = true;
+        SelectedDevice = choice;
+        _loading = false;
+    }
 
     ChannelStripViewModel(Channel channel, string name, Func<float?> getGain, Action<float> setGain,
-        Func<bool> getMute, Action<bool> setMute, Func<bool?> getEq, bool squareLaw)
+        Func<bool> getMute, Action<bool> setMute, bool squareLaw)
     {
         Channel = channel;
         Name = name;
@@ -47,7 +71,6 @@ public sealed partial class ChannelStripViewModel : ObservableObject
         _setGain = setGain;
         _getMute = getMute;
         _setMute = setMute;
-        _getEq = getEq;
         _squareLaw = squareLaw;
         var brush = new SolidColorBrush(ChannelColors[channel]);
         brush.Freeze();
@@ -59,16 +82,16 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     /// A Sonar output channel. Its volume is the APO redirection gain, mapped with a square law so the bar
     /// feels even to the ear.
     /// </summary>
+    public static System.Windows.Media.Color ColorOf(Channel channel) => ChannelColors[channel];
+
     public static ChannelStripViewModel ForSonar(SonarEngine sonar, Channel channel, string name) => new(channel, name,
         () => sonar.GetVolume(channel), v => sonar.SetVolume(channel, v),
-        () => sonar.GetMute(channel), m => sonar.SetMute(channel, m),
-        () => sonar.GetBool(channel, ApoSetting.ParametricEqState), squareLaw: true);
+        () => sonar.GetMute(channel), m => sonar.SetMute(channel, m), squareLaw: true);
 
     /// <summary>The virtual mic that apps record from: Windows' own volume and mute of that device.</summary>
     public static ChannelStripViewModel ForMic(ChannelMonitor monitor) => new(Channel.Mic, "Mic",
         () => monitor.MicVolume, v => monitor.MicVolume = v,
-        () => monitor.MicMuted, m => monitor.MicMuted = m,
-        () => null, squareLaw: false);
+        () => monitor.MicMuted, m => monitor.MicMuted = m, squareLaw: false);
 
     public void Refresh()
     {
@@ -78,7 +101,6 @@ public sealed partial class ChannelStripViewModel : ObservableObject
             if (_getGain() is { } gain)
                 Volume = Math.Round((_squareLaw ? Math.Sqrt(gain) : gain) * 100);
             Muted = _getMute();
-            EqText = _getEq() switch { true => "On", false => "Off", null => "" };
         }
         catch (Exception)
         {
@@ -106,4 +128,12 @@ public sealed partial class ChannelStripViewModel : ObservableObject
         catch (Exception) { }
     }
 
+}
+
+/// <summary>An entry in a channel's device picker. <see cref="Id"/> null = Automatic.</summary>
+public sealed partial class DeviceChoice(string? id, string label) : ObservableObject
+{
+    public string? Id { get; } = id;
+    [ObservableProperty] string _label = label;
+    public bool IsAutomatic => Id is null;
 }

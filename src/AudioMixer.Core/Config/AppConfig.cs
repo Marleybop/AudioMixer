@@ -32,11 +32,22 @@ public sealed class AppConfig
 
     public HeadsetConfig Headset { get; set; } = new();
 
+    /// <summary>Per-channel sound and device choices. Missing channels are filled in on first use.</summary>
+    public Dictionary<Channel, ChannelConfig> Channels { get; set; } = [];
+
+    public ChannelConfig ForChannel(Channel channel)
+    {
+        if (!Channels.TryGetValue(channel, out var c))
+            Channels[channel] = c = new ChannelConfig();
+        return c;
+    }
+
     // ---- Persistence ----
 
     static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter() },
     };
 
@@ -67,6 +78,21 @@ public sealed class AppConfig
         File.WriteAllText(temp, JsonSerializer.Serialize(this, Json));
         File.Move(temp, path, overwrite: true);
     }
+}
+
+public sealed class ChannelConfig
+{
+    /// <summary>A device this channel always uses (render id; capture id for the mic). Null = follow the priority list.</summary>
+    public DeviceRef? Device { get; set; }
+
+    /// <summary>The channel's EQ and effects. Null until first read from the APO (carries over what Sonar had).</summary>
+    public SoundSettings? Sound { get; set; }
+
+    /// <summary>The preset the sound came from, shown on the channel strip.</summary>
+    public string PresetName { get; set; } = "Custom";
+
+    /// <summary>True once the sound has been edited since the preset was picked.</summary>
+    public bool Modified { get; set; }
 }
 
 public sealed class HeadsetConfig

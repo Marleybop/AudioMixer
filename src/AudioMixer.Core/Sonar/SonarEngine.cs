@@ -165,6 +165,37 @@ public sealed class SonarEngine : IDisposable
         return game < 0.999f ? 1f - game : chat - 1f;
     }
 
+    // ---- Sound (EQ and effects) ----
+
+    readonly Dictionary<(Channel, ApoSetting), object> _applied = new();
+
+    /// <summary>
+    /// Applies a channel's EQ and effects. Only values that changed since the last call are written, so this is
+    /// cheap enough to call on every drag step. Pass <paramref name="force"/> to rewrite everything (e.g. after
+    /// something else, such as Sonar, may have changed the APO).
+    /// </summary>
+    public void ApplySound(Channel channel, SoundSettings settings, bool force = false)
+    {
+        var values = SoundApo.ToApo(channel, settings);
+        Invoke(() =>
+        {
+            foreach (var (setting, value) in values)
+            {
+                if (!force && _applied.TryGetValue((channel, setting), out var last) && last.Equals(value))
+                    continue;
+                var s = Setting(channel, setting);
+                switch (value)
+                {
+                    case bool b: s.SetBoolSetting(b); break;
+                    case float f: s.SetFloatSetting(f); break;
+                    case int i: s.SetLongSetting(i); break;
+                    case string str: s.SetStringSetting(str); break;
+                }
+                _applied[(channel, setting)] = value;
+            }
+        });
+    }
+
     // ---- Generic access ----
 
     public bool GetBool(Channel channel, ApoSetting setting) => Invoke(() => { Setting(channel, setting).GetBoolSetting(out var v); return v; });
@@ -179,6 +210,33 @@ public sealed class SonarEngine : IDisposable
 
     public (float Default, float Min, float Max) GetFloatRange(Channel channel, ApoSetting setting) =>
         Invoke(() => { Setting(channel, setting).GetFloatTraits(out var d, out var min, out var max); return (d, min, max); });
+
+    /// <summary>A setting's type, current value and default/range, as text (for diagnostics).</summary>
+    public string Describe(Channel channel, ApoSetting setting) => Invoke(() =>
+    {
+        var s = Setting(channel, setting);
+        s.GetSettingType(out var type);
+        switch (type)
+        {
+            case ApoSettingType.Boolean:
+                s.GetBoolSetting(out var b);
+                s.GetBoolTraits(out var bd);
+                return $"bool   {b} (default {bd})";
+            case ApoSettingType.LongInt:
+                s.GetLongSetting(out var l);
+                s.GetLongTraits(out var ld, out var lmin, out var lmax);
+                return $"long   {l} (default {ld}, {lmin}…{lmax})";
+            case ApoSettingType.Float:
+                s.GetFloatSetting(out var f);
+                s.GetFloatTraits(out var fd, out var fmin, out var fmax);
+                return $"float  {f:0.####} (default {fd:0.####}, {fmin:0.####}…{fmax:0.####})";
+            case ApoSettingType.String:
+                s.GetStringSetting(out var str);
+                return $"string \"{str}\"";
+            default:
+                return type.ToString();
+        }
+    });
 
     IApoSetting Setting(Channel channel, ApoSetting setting)
     {

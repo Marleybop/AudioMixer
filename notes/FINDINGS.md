@@ -45,7 +45,7 @@ Reads: `10` fw versions (4×12 ASCII) · `12` unique id · `20` audio_settings �
 Writes: `09` save_to_flash · `27` high_gain (dev value 1 low/2 high) · `2E` eq preset (0 Flat,1 Bass,2 Focus,3 Smiley,4 Custom,5-18 games)
   · `33` custom EQ 10 bands, byte = 2*(dB+10), 0..40 (0x14 = 0 dB), ±10 dB in 0.5 dB · `37` mic volume 1-10 · `39` sidetone 0-3
   · `43` line-out mode (1 ChatMix, 2 StreamMix) · `47` stream mix · `49` software chatmix on/off · `8D` sonar_present on/off
-  · `83` dim timer · `85` OLED brightness · `89` home screen · `B2` BT on startup · `B3` BT call behaviour · `BF` mute LED · `C1` headset sleep timer · `C3` speed/range
+  · `83` dim timer (takes the STEP 0–6, not minutes) · `85` OLED brightness · `89` home screen · `B2` BT on startup · `B3` BT call behaviour · `BF` mute LED · `C1` headset sleep timer · `C3` speed/range
   · `93` draw OLED bitmap (feature report) · `95` reload display
 Push events on sync interface (MI_04 Col02, usage page 0xFF00): `B5` connection (status in byte 4), `B7` battery, `45` ChatMix game/chat,
   plus echo of setting changes made on the dial (27/2E/31/37/39/43/47/83/85/89/B2/B3/BF/C1/C3).
@@ -93,6 +93,23 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 - Per-app outputs are Windows' own per-app assignments (HKCU\…\Audio\PolicyConfig\PropertyStore); Sonar had pinned chrome.exe to Sonar Media.
 - Must reset ChatMixGainLin to 1 on exit — Sonar never resets Media/Aux, so a stale 0 silences them. (Router.Dispose does this.)
 
+## Sonar's per-channel sound → APO settings (decomp: RenderConfigSettings, CaptureConfigSettings, AudioRepository, AudioSettingExtensions)
+- Game/Media/Aux use the playback set; **Chat (ChatRender repo) and Mic (ChatCapture) use the voice set**, including the *Capture*ParametricEq settings.
+- Playback: RenderState · BassBoost{State,GainDB} (80 Hz) · voice = MidBoost{State,GainDB} (2 kHz) · TrebleBoost{State,GainDB} (8 kHz) ·
+  Smart volume = CompressorState + CompressorLevel (0–1) + loudness as Compressor1/2ThresholdDB (−9 loud, −18 balanced, −27 quiet) ·
+  Volume boost = GeneralGainDB (UI 0–12) · Spatial = VirtualSurroundState + AdvancedSurroundState, FormFactor (long, 0 headphones / 1 speakers),
+  ReverbGainDB (−12 performance … 0 immersion), 8× ChannelPosition*71 / GainDB* (distance = gain on all but the sub, 0–12).
+- Voice: CaptureState · CaptureCompressor{State,Level} ("Compressor") · NoiseGate{State,ThresholdDB −60…−10,AutoThreshold}, NoiseGateOffsetDB = 3 ·
+  CaptureAmbientNoiseReduction{State,Rate} (background) · ImpactNoiseReduction{State,Agressiveness} — both forced off while ClearCast is on ·
+  ClearCast = NoiseCanceling{State,MixFactor} · AECState (needs AEC{Game,ChatRender,Media,Aux}DeviceId on ChatCapture = each channel's output, set on routing).
+- EQ filter Type is a long: 0 bypass, 1 low pass, 2 high pass, 3 band pass Q, 4 band pass 0 dB, 5 notch, 6 all pass, 7 peaking, 8 low shelf, 9 high shelf.
+  APO ranges: freq 20–20000, Q 0.5–10, gain ±36 (Sonar's UI shows ±12).
+- Verified: reading all five channels and writing the same values back changes nothing (`AudioMixer.Cli sound <channel>`); a bass boost set from the
+  app's UI reads back from the APO. CONFIRMED (2026-10-18).
+- Sonar's presets live in `C:\ProgramData\SteelSeries\GG\apps\sonar\db\database.db`, table `configs` (`vad` 1 Game, 2 Chat, 3 Mic, 4 Media, 5 Aux;
+  `data` = the config JSON above, camelCase) and `selected_config`. 399 rows here (346 game presets). Read at run time from a temp copy with Windows' winsqlite3.
+- Not in Sonar's UI but in the APO: ForceMonoMixState, a master limiter, compressor bands, noise gate attack/release, reverb filters. Not used yet.
+
 ## Open questions
 - Does the VAD driver survive a GG uninstall?
 - ~~Which byte = radio_connection_status~~ resolved (byte 14). ~~Decrypt .edevice~~ resolved via prior work.
@@ -109,6 +126,12 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 - **Writable:** EQ preset 0x2E (0 Flat, 1 Bass boost, 2 Focus, 3 Smiley, 4 Custom, 5–18 game presets), custom EQ 0x33, high mic gain 0x27, mic volume 0x37, sidetone 0x39 (0–3),
   line out 0x43 (1 ChatMix / 2 Stream mix), stream mix 0x47 (main/aux/mic 0–100), dim timer 0x83, OLED brightness 0x85 (1–10), home screen 0x89 (Detailed/Simple),
   BT on at power-up 0xB2, BT call behaviour 0xB3 (nothing / −12 dB / mute), mute-light brightness 0xBF (1–10), headset sleep 0xC1, Speed/Range 0xC3. CONFIRMED (spec).
+- **Timers (0x83 dim, 0xC1 sleep) take the step 0–6** ([0,1,5,10,15,30,60] min), not minutes: GG's engine converts with
+  `transform_minutes_to_dim_timer` before writing. My first version sent minutes (a bug). CONFIRMED (spec + live: wrote 5 min → read back step 2).
+- Stream mix 0x47 = `[main, unused, aux, mic]`, each 0–100; in the 0x20 report at r[22], r[23] unused, r[24], r[25]. CONFIRMED (spec + live read `64 00 64 64`).
+- Firmware 0x10 = four 12-char ASCII fields (base DSP, base MCU, headset MCU, headset BT), e.g. `0000.003.082`. Mine: base 0.3.82 / 1.29.27, headset 1.22.11 / 1.15.4. CONFIRMED (live).
+- The base station echoes setting changes made on its own menu on the sync interface (report 0x07, same command byte; `31 band gain` for one custom EQ band). LIKELY (spec `translate_sync_data`).
+- The mic-muted light is drawn by the headset firmware using muted_mic_brightness; nothing in Sonar or GG drives it otherwise. CONFIRMED (spec + decomp search).
 - **Read-only** (headset buttons only; no write command in the spec): ANC/transparency mode and level, mic mute, Bluetooth power/link state, battery, volume, audio input (USB1/USB2/Xbox).
   Read: ux_settings also has idle_brightness and home_screen_mic_mute, but the spec has no separate write for them. CONFIRMED (spec).
 - **No RGB** on this headset/base. The only "lights" are OLED brightness/idle/dim and the mic-muted light brightness.

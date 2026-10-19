@@ -45,6 +45,14 @@ public static class NovaProProtocol
     public const byte VolumeEvent = 0x25;   // [2] = volume 0…56
     public const byte ChatMixEvent = 0x45;  // [2] = game 0…100, [3] = chat 0…100 (one of them is 100)
     public const byte ConnectionEvent = 0xB5;
+    public const byte CustomEqBandEvent = 0x31; // [2] = band, [3] = gain byte
+
+    /// <summary>Settings the base station echoes on the sync interface when they are changed on its own menu.</summary>
+    public static readonly IReadOnlySet<byte> SettingEchoes = new HashSet<byte>
+    {
+        HighGain, EqPreset, CustomEqBandEvent, MicVolume, Sidetone, LineOutMode, StreamMix, DimTimer, OledBrightness,
+        HomeScreenType, BluetoothStartup, BluetoothCallMode, MutedMicBrightness, PowerInactivityTimer, WirelessMode,
+    };
 
     /// <summary>
     /// Every command this app may send. Anything else is refused, in particular reset (0x01),
@@ -67,8 +75,20 @@ public static class NovaProProtocol
     /// <summary>The timer steps the base station stores (dim timer, headset sleep), in minutes; 0 = never.</summary>
     public static readonly IReadOnlyList<int> TimerMinutes = [0, 1, 5, 10, 15, 30, 60];
 
-    /// <summary>Stored timer step (0…6) to minutes. The write commands take minutes, the reports return the step.</summary>
+    /// <summary>Stored timer step (0…6) to minutes.</summary>
     public static int TimerStepToMinutes(byte step) => step < TimerMinutes.Count ? TimerMinutes[step] : 0;
+
+    /// <summary>
+    /// Minutes to the step the base station takes. Both the writes (0x83, 0xC1) and the reports use the step;
+    /// GG's engine converts minutes to the step before sending (spec: transform_minutes_to_*).
+    /// </summary>
+    public static byte MinutesToTimerStep(int minutes)
+    {
+        for (var i = 0; i < TimerMinutes.Count; i++)
+            if (TimerMinutes[i] >= minutes)
+                return (byte)i;
+        return (byte)(TimerMinutes.Count - 1);
+    }
 
     /// <summary>Battery level byte (0…8) to percent, as the official software maps it.</summary>
     public static int BatteryPercent(byte level) => level switch
@@ -158,7 +178,10 @@ public sealed record BaseAudioSettings(
     int Sidetone,
     LineOutMode LineOut,
     int ChatMixGame,
-    int ChatMixChat)
+    int ChatMixChat,
+    int StreamMain,
+    int StreamAux,
+    int StreamMic)
 {
     /// <summary>Highest value of <see cref="Volume"/> (the base station's volume dial).</summary>
     public const int MaxVolume = 56;
@@ -173,7 +196,11 @@ public sealed record BaseAudioSettings(
         Sidetone: r[18],
         LineOut: (LineOutMode)r[19],
         ChatMixGame: r[20],
-        ChatMixChat: r[21]);
+        ChatMixChat: r[21],
+        // r[23] is unused
+        StreamMain: r[22],
+        StreamAux: r[24],
+        StreamMic: r[25]);
 
     /// <summary>Which source the base station is playing (USB 1 / USB 2 / Xbox), as a short label.</summary>
     public string InputName => Input switch { 0 => "USB 1", 1 => "USB 2", 3 => "Xbox", _ => $"Input {Input}" };
@@ -195,4 +222,20 @@ public sealed record BaseUxSettings(
         SimpleHomeScreen: r[5] == 1,
         HomeScreenMicMute: r[6] == 1,
         SonarPresent: r[7] == 1);
+}
+
+/// <summary>Firmware of the base station (DSP, MCU) and the headset (MCU, Bluetooth), from the 0x10 report.</summary>
+public sealed record FirmwareVersions(string BaseDsp, string BaseMcu, string HeadsetMcu, string HeadsetBluetooth)
+{
+    /// <summary>Four 12-character fields such as "0000.003.082"; shown as "0.3.82". All zeros = headset not paired.</summary>
+    public static FirmwareVersions FromReport(byte[] r)
+    {
+        string Field(int i)
+        {
+            var text = System.Text.Encoding.ASCII.GetString(r, 2 + i * 12, 12).TrimEnd('\0', ' ');
+            var parts = text.Split('.').Select(p => int.TryParse(p, out var n) ? n.ToString() : p).ToArray();
+            return parts.All(p => p == "0") ? "" : string.Join('.', parts);
+        }
+        return new FirmwareVersions(Field(0), Field(1), Field(2), Field(3));
+    }
 }

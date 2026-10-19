@@ -45,6 +45,74 @@ switch (command)
     case "watch":
         await Watch(args.Skip(1).FirstOrDefault());
         break;
+    case "dim-timer" or "sleep-timer":
+        // dim-timer|sleep-timer <minutes>: write it, then read back what the base station stored
+        using (var headset = new NovaProWireless())
+        {
+            headset.TryConnect();
+            var minutes = int.Parse(args[1]);
+            if (command == "dim-timer") headset.SetDimTimer(minutes);
+            else headset.SetSleepTimer(minutes);
+            await Task.Delay(300);
+            Console.WriteLine(command == "dim-timer"
+                ? $"dim after {(await headset.GetUxSettingsAsync()).DimAfterMinutes} min"
+                : $"sleep after {HeadsetStatus.FromWirelessSettings(await headset.QueryAsync(NovaProProtocol.WirelessSettings)).SleepAfterMinutes} min");
+        }
+        break;
+    case "mute-light":
+        // mute-light <1-10>: set the mic-muted light brightness and store it in the base station
+        using (var headset = new NovaProWireless())
+        {
+            headset.TryConnect();
+            headset.SetMutedMicBrightness(int.Parse(args[1]));
+            headset.SaveToFlash();
+            await Task.Delay(300);
+            Console.WriteLine($"mute light = {HeadsetStatus.FromWirelessSettings(await headset.QueryAsync(NovaProProtocol.WirelessSettings)).MutedMicBrightness}");
+        }
+        break;
+    case "presets":
+        foreach (var group in SonarPresets.Load().GroupBy(p => p.Channel))
+            Console.WriteLine($"{group.Key}: {group.Count()} presets, selected: {string.Join(", ", group.Where(p => p.IsSelectedInSonar).Select(p => p.Name))}\n  "
+                + string.Join(", ", group.Take(12).Select(p => p.Name)));
+        break;
+    case "sound":
+        // sound <channel>: the channel's EQ/effects as read from the APO, and a check that writing them back changes nothing
+        using (var sonar = SonarEngine.TryCreate(out var error) ?? throw new InvalidOperationException(error))
+        {
+            var channel = Enum.Parse<Channel>(args[1], ignoreCase: true);
+            var sound = SoundApo.FromApo(sonar, channel);
+            Console.WriteLine(sound.ToJson());
+            var roundTrip = SoundSettings.FromJson(sound.ToJson());
+            foreach (var (setting, value) in SoundApo.ToApo(channel, roundTrip))
+            {
+                object current = value switch
+                {
+                    bool => sonar.GetBool(channel, setting),
+                    int => sonar.GetLong(channel, setting),
+                    _ => sonar.GetFloat(channel, setting),
+                };
+                if (!Equals(current, value) && !(value is float f && Math.Abs(f - (float)current) < 1e-4))
+                    Console.WriteLine($"  differs: {setting} apo={current} ours={value}");
+            }
+        }
+        break;
+    case "apo":
+        // apo <Game|Chat|Media|Aux|Mic> [name filter]: every APO setting of that channel, with type and range
+        using (var sonar = SonarEngine.TryCreate(out var error) ?? throw new InvalidOperationException(error))
+        {
+            var channel = Enum.Parse<Channel>(args[1], ignoreCase: true);
+            var filter = args.Skip(2).FirstOrDefault() ?? "";
+            foreach (var setting in Enum.GetValues<ApoSetting>().Where(s => s != ApoSetting.NumSettings))
+            {
+                if (!setting.ToString().Contains(filter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string text;
+                try { text = sonar.Describe(channel, setting); }
+                catch (Exception e) { text = $"error {e.HResult:X8}"; }
+                Console.WriteLine($"{setting,-46} {text}");
+            }
+        }
+        break;
     default:
         Console.WriteLine("usage: AudioMixer.Cli list|status|init|run");
         break;
