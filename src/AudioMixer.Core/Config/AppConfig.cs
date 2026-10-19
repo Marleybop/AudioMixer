@@ -30,6 +30,9 @@ public sealed class AppConfig
     /// <summary>Channels that fade out as the dial moves toward chat (Sonar itself only fades Game).</summary>
     public List<Channel> ChatMixFadedChannels { get; set; } = [Channel.Game, Channel.Media, Channel.Aux];
 
+    /// <summary>Channel strips shown in the mixer, in order.</summary>
+    public List<Channel> MixerChannels { get; set; } = [Channel.Game, Channel.Chat, Channel.Media, Channel.Mic];
+
     public HeadsetConfig Headset { get; set; } = new();
 
     // ---- Persistence ----

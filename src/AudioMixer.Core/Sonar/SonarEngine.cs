@@ -142,12 +142,18 @@ public sealed class SonarEngine : IDisposable
     /// </summary>
     public void SetChatMixBalance(float balance, IReadOnlyCollection<Channel> fadedChannels)
     {
-        balance = Math.Clamp(balance, -1f, 1f);
-        var scaled = Math.Abs(balance) < 0.001f ? 0f : Math.Sign(balance) * 2f * balance / (balance + Math.Sign(balance));
-        var otherGain = Math.Clamp(1f - scaled, 0f, 1f);
+        var (otherGain, chatGain) = ChatMixGains(balance);
         foreach (var channel in new[] { Channel.Game, Channel.Media, Channel.Aux })
             SetFloat(channel, ApoSetting.ChatMixGainLin, fadedChannels.Contains(channel) ? otherGain : 1f);
-        SetFloat(Channel.Chat, ApoSetting.CaptureChatMixGainLin, Math.Clamp(1f + scaled, 0f, 1f));
+        SetFloat(Channel.Chat, ApoSetting.CaptureChatMixGainLin, chatGain);
+    }
+
+    /// <summary>The linear gains a ChatMix balance gives the faded channels and Chat (see <see cref="SetChatMixBalance"/>).</summary>
+    public static (float Other, float Chat) ChatMixGains(float balance)
+    {
+        balance = Math.Clamp(balance, -1f, 1f);
+        var scaled = Math.Abs(balance) < 0.001f ? 0f : Math.Sign(balance) * 2f * balance / (balance + Math.Sign(balance));
+        return (Math.Clamp(1f - scaled, 0f, 1f), Math.Clamp(1f + scaled, 0f, 1f));
     }
 
     /// <summary>Converts the base station's dial report (game and chat level, 0–100, one of them 100) to a balance.</summary>

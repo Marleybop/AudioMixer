@@ -64,6 +64,12 @@ public static class NovaProProtocol
 
     public static double EqByteToGain(byte value) => value / 2.0 - 10;
 
+    /// <summary>The timer steps the base station stores (dim timer, headset sleep), in minutes; 0 = never.</summary>
+    public static readonly IReadOnlyList<int> TimerMinutes = [0, 1, 5, 10, 15, 30, 60];
+
+    /// <summary>Stored timer step (0…6) to minutes. The write commands take minutes, the reports return the step.</summary>
+    public static int TimerStepToMinutes(byte step) => step < TimerMinutes.Count ? TimerMinutes[step] : 0;
+
     /// <summary>Battery level byte (0…8) to percent, as the official software maps it.</summary>
     public static int BatteryPercent(byte level) => level switch
     {
@@ -103,7 +109,12 @@ public sealed record HeadsetStatus(
     bool MicMuted,
     NoiseControl NoiseControl,
     int TransparencyLevel,
-    bool BluetoothOn)
+    bool BluetoothOn,
+    bool BluetoothOnAtStartup,
+    BluetoothCallMode BluetoothCallMode,
+    int MutedMicBrightness,
+    int SleepAfterMinutes,
+    bool RangeMode)
 {
     public bool IsHeadsetOn => Radio == RadioState.Connected;
 
@@ -115,27 +126,73 @@ public sealed record HeadsetStatus(
         MicMuted: r[9] == 1,
         NoiseControl: (NoiseControl)r[10],
         TransparencyLevel: r[8],
-        BluetoothOn: r[4] != 1);
+        BluetoothOn: r[4] != 1,
+        BluetoothOnAtStartup: r[2] == 1,
+        BluetoothCallMode: (BluetoothCallMode)r[3],
+        MutedMicBrightness: r[11],
+        SleepAfterMinutes: NovaProProtocol.TimerStepToMinutes(r[12]),
+        RangeMode: r[13] == 1);
+}
+
+public enum BluetoothCallMode : byte
+{
+    DoNothing = 0,
+    LowerOtherAudio = 1, // −12 dB
+    MuteOtherAudio = 2,
+}
+
+public enum LineOutMode : byte
+{
+    ChatMix = 1,
+    StreamMix = 2,
 }
 
 /// <summary>Audio settings stored in the base station (0x20 report).</summary>
 public sealed record BaseAudioSettings(
+    int Input,
     int Volume,
     bool HighGain,
     int EqPreset,
     double[] CustomEqDb,
     int MicVolume,
     int Sidetone,
+    LineOutMode LineOut,
     int ChatMixGame,
     int ChatMixChat)
 {
+    /// <summary>Highest value of <see cref="Volume"/> (the base station's volume dial).</summary>
+    public const int MaxVolume = 56;
+
     public static BaseAudioSettings FromReport(byte[] r) => new(
+        Input: r[2],
         Volume: r[3],
         HighGain: r[4] == 2,
         EqPreset: r[6],
         CustomEqDb: Enumerable.Range(0, 10).Select(i => NovaProProtocol.EqByteToGain(r[7 + i])).ToArray(),
         MicVolume: r[17],
         Sidetone: r[18],
+        LineOut: (LineOutMode)r[19],
         ChatMixGame: r[20],
         ChatMixChat: r[21]);
+
+    /// <summary>Which source the base station is playing (USB 1 / USB 2 / Xbox), as a short label.</summary>
+    public string InputName => Input switch { 0 => "USB 1", 1 => "USB 2", 3 => "Xbox", _ => $"Input {Input}" };
+}
+
+/// <summary>Base station screen settings (0x80 report).</summary>
+public sealed record BaseUxSettings(
+    int DimAfterMinutes,
+    int Brightness,
+    int IdleBrightness,
+    bool SimpleHomeScreen,
+    bool HomeScreenMicMute,
+    bool SonarPresent)
+{
+    public static BaseUxSettings FromReport(byte[] r) => new(
+        DimAfterMinutes: NovaProProtocol.TimerStepToMinutes(r[2]),
+        Brightness: r[3],
+        IdleBrightness: r[4],
+        SimpleHomeScreen: r[5] == 1,
+        HomeScreenMicMute: r[6] == 1,
+        SonarPresent: r[7] == 1);
 }
