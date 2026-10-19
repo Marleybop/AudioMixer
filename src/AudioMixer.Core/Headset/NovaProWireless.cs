@@ -167,6 +167,9 @@ public sealed class NovaProWireless : IDisposable
     public async Task<BaseAudioSettings> GetAudioSettingsAsync() =>
         BaseAudioSettings.FromReport(await QueryAsync(NovaProProtocol.AudioSettings));
 
+    public async Task<BaseUxSettings> GetUxSettingsAsync() =>
+        BaseUxSettings.FromReport(await QueryAsync(NovaProProtocol.UxSettings));
+
     /// <summary>Sends a command with optional parameter bytes. Refuses anything not on the allowlist.</summary>
     public void Send(byte command, params byte[] parameters)
     {
@@ -209,6 +212,21 @@ public sealed class NovaProWireless : IDisposable
     public void SetMicVolume(int level) => Send(NovaProProtocol.MicVolume, (byte)Math.Clamp(level, 1, 10));
     public void SetHighGain(bool enabled) => Send(NovaProProtocol.HighGain, (byte)(enabled ? 2 : 1));
     public void SetOledBrightness(int level) => Send(NovaProProtocol.OledBrightness, (byte)Math.Clamp(level, 1, 10));
+    /// <summary>Selects a stored EQ preset: 0 Flat, 1 Bass boost, 2 Focus, 3 Smiley, 4 Custom, 5–18 game presets.</summary>
+    public void SetEqPreset(int preset) => Send(NovaProProtocol.EqPreset, (byte)Math.Clamp(preset, 0, 18));
+    public void SetLineOutMode(LineOutMode mode) => Send(NovaProProtocol.LineOutMode, (byte)mode);
+    /// <summary>Dims the base station screen after this many minutes (0 = never); see <see cref="NovaProProtocol.TimerMinutes"/>.</summary>
+    public void SetDimTimer(int minutes) => Send(NovaProProtocol.DimTimer, (byte)Math.Clamp(minutes, 0, 60));
+    public void SetSimpleHomeScreen(bool simple) => Send(NovaProProtocol.HomeScreenType, (byte)(simple ? 1 : 0));
+    public void SetBluetoothOnAtStartup(bool on) => Send(NovaProProtocol.BluetoothStartup, (byte)(on ? 1 : 0));
+    public void SetBluetoothCallMode(BluetoothCallMode mode) => Send(NovaProProtocol.BluetoothCallMode, (byte)mode);
+    public void SetMutedMicBrightness(int level) => Send(NovaProProtocol.MutedMicBrightness, (byte)Math.Clamp(level, 1, 10));
+    /// <summary>Puts the headset to sleep after this many idle minutes (0 = never); see <see cref="NovaProProtocol.TimerMinutes"/>.</summary>
+    public void SetSleepTimer(int minutes) => Send(NovaProProtocol.PowerInactivityTimer, (byte)Math.Clamp(minutes, 0, 60));
+    /// <summary>Speed (lower latency) or Range mode for the 2.4 GHz link.</summary>
+    public void SetRangeMode(bool range) => Send(NovaProProtocol.WirelessMode, (byte)(range ? 1 : 0));
+    /// <summary>Stores the current settings in the base station's flash so they survive a power cycle.</summary>
+    public void SaveToFlash() => Send(NovaProProtocol.SaveToFlash);
     /// <summary>Tells the base station whether Sonar-style software (us) is managing ChatMix/routing.</summary>
     public void SetSonarPresent(bool present) => Send(NovaProProtocol.SonarPresent, (byte)(present ? 1 : 0));
     public void SetSoftwareChatMix(bool enabled) => Send(NovaProProtocol.SoftwareChatMix, (byte)(enabled ? 1 : 0));

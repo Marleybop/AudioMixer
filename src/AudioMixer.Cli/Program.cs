@@ -37,7 +37,7 @@ switch (command)
     case "reset-chatmix":
         using (var sonar = SonarEngine.TryCreate(out var error) ?? throw new InvalidOperationException(error))
         {
-            sonar.SetChatMixBalance(0, []);
+            sonar.SetChatMixBalance(0);
             foreach (var channel in new[] { Channel.Game, Channel.Media, Channel.Aux })
                 Console.WriteLine($"{channel} ChatMix gain = {sonar.GetFloat(channel, ApoSetting.ChatMixGainLin)}");
         }

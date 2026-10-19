@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -13,6 +14,15 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         SourceInitialized += (_, _) => UseDarkTitleBar();
+        // Live meters only run while the window is on screen.
+        IsVisibleChanged += (_, e) => viewModel.IsViewVisible = (bool)e.NewValue && WindowState != WindowState.Minimized;
+        StateChanged += (_, _) => viewModel.IsViewVisible = IsVisible && WindowState != WindowState.Minimized;
+    }
+
+    void OnLink(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
     }
 
     void UseDarkTitleBar()

@@ -13,6 +13,10 @@ public sealed partial class DeviceItemViewModel : ObservableObject
     [ObservableProperty] bool _enabled;
     [ObservableProperty] bool _blocked;
     [ObservableProperty] bool _isCurrent;
+    /// <summary>Position among the devices in use (1 = first choice), 0 when not in the list.</summary>
+    [ObservableProperty] int _rank;
+
+    public string RankText => Rank > 0 ? Rank.ToString() : "–";
 
     public DeviceItemViewModel(string id, string name)
     {
@@ -32,4 +36,5 @@ public sealed partial class DeviceItemViewModel : ObservableObject
     partial void OnStateChanged(EndpointState? value) => OnPropertyChanged(nameof(StateText));
     partial void OnIsCurrentChanged(bool value) => OnPropertyChanged(nameof(StateText));
     partial void OnBlockedChanged(bool value) => OnPropertyChanged(nameof(StateText));
+    partial void OnRankChanged(int value) => OnPropertyChanged(nameof(RankText));
 }
