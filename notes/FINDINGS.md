@@ -148,3 +148,27 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 - **No RGB** on this headset/base. The only "lights" are OLED brightness/idle/dim and the mic-muted light brightness.
 - Battery is in 8 steps (12.5 %), not 1 %.
 - Software mic mute is possible on our side (MicBridge / Sonar virtual mic), separate from the headset's hardware mute.
+
+## PC stats, CPU temperature and weather for the screen (2026-10-18 late)
+
+- **GPU temperature without vendor libraries:** `D3DKMTQueryAdapterInfo` type 62 (KMTQAITYPE_ADAPTERPERFDATA) returns
+  `Temperature` in tenths of a °C, plus `FanRpm` and `Power` (tenths of a percent), per adapter, without admin. RTX 5070 Ti: 45.8 °C vs NVML 46 °C.
+  The Ryzen's integrated Radeon also reports a value (55 °C here), but it isn't the CPU core temperature. The Microsoft Basic Render adapter
+  refuses (0xC000000D). Adapter names: type 8 (ADAPTERREGISTRYINFO); dedicated VRAM: type 3 (GETSEGMENTSIZE). CONFIRMED (live).
+- **GPU load:** PDH `\GPU Engine(*)\Utilization Percentage`, summed per engine (`..._eng_N_engtype_X`) for the adapter's LUID
+  (`_0x{luidLow:X8}_` in the instance name), then the busiest engine = Task Manager's figure. 26.3 % vs NVML 26 %. VRAM in use:
+  `\GPU Adapter Memory(*)\Dedicated Usage` (5.1 GB vs NVML 5.4 GB; NVML counts reserved memory). Wildcard instances are re-expanded on
+  each collect. CONFIRMED (live).
+- **CPU temperature needs a kernel driver and admin.** LibreHardwareMonitorLib 0.9.6 uses PawnIO only (WinRing0 is gone; the PawnIO
+  modules, e.g. AMDFamily17.bin and RyzenSMU.bin, are embedded in the DLL). Ryzen 7 9800X3D: "Core (Tctl/Tdie)", 64–71 °C while gaming.
+  CONFIRMED (live, elevated reader).
+- A scheduled task with RunLevel HighestAvailable and an InteractiveToken principal, registered once from an elevated process, can then
+  be started without a prompt by the same user's non-elevated process (`schtasks /Run`). Last Result 267009 = SCHED_S_TASK_RUNNING. CONFIRMED (live).
+  So the task must only run files that standard users can't change (a copy under Program Files), or it becomes a UAC bypass.
+- An elevated pipe server with a DACL granting Authenticated Users read/write is readable from a medium-integrity client
+  (`NamedPipeClientStream` direction In). CONFIRMED (live).
+- `schtasks /Query /XML` prints plain text (the XML declaration says UTF-16, but stdout isn't). `SecurityElement.FromString` gave an empty
+  `Text` for the `<Command>` element, so I read the text between the tags and decode the entities instead. CONFIRMED (live).
+- Open-Meteo: geocoding `geocoding-api.open-meteo.com/v1/search` (name, admin1, country, lat/long) and forecast `api.open-meteo.com/v1/forecast`
+  with `current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m` and daily max/min/precipitation chance. No key.
+  Free tier: non-commercial use, under 10,000 calls a day, CC BY 4.0 credit. CONFIRMED (live + their terms page).
