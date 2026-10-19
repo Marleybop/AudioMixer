@@ -102,4 +102,10 @@ public sealed class HeadsetConfig
 
     /// <summary>What the base station's screen shows: BaseStation (its own), Widget (AudioMixer's) or Off.</summary>
     public string Screen { get; set; } = "BaseStation";
+
+    /// <summary>The picture or GIF (file name in the Screens folder) shown when <see cref="Screen"/> is Custom.</summary>
+    public string? ScreenImage { get; set; }
+
+    /// <summary>Blank the base station's screen after this many minutes without keyboard, mouse or dial use (0 = never).</summary>
+    public int ScreenSleepMinutes { get; set; }
 }

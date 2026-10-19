@@ -1,3 +1,4 @@
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Media;
@@ -99,8 +100,16 @@ public sealed partial class MainViewModel : ObservableObject
             if (c) _ = LoadHeadsetSettingsAsync();
             else UpdateHeadset(null);
         });
-        host.Headset.ChatMixChanged += (_, d) => _ui.BeginInvoke(() => SetChatMixFromDial(d.Game, d.Chat));
-        host.Headset.VolumeChanged += (_, v) => _ui.BeginInvoke(() => HeadsetVolume = v);
+        host.Headset.ChatMixChanged += (_, d) => _ui.BeginInvoke(() =>
+        {
+            _oled.NotifyActivity();
+            SetChatMixFromDial(d.Game, d.Chat);
+        });
+        host.Headset.VolumeChanged += (_, v) => _ui.BeginInvoke(() =>
+        {
+            _oled.NotifyActivity();
+            HeadsetVolume = v;
+        });
         host.Headset.SettingsChanged += (_, _) => _ui.BeginInvoke(() => Restart(_headsetReload));
         host.ActiveChanged += (_, _) => _ui.BeginInvoke(() =>
         {
@@ -118,6 +127,13 @@ public sealed partial class MainViewModel : ObservableObject
         if (host.IsActive)
             ApplyAllSounds();
         _screenMode = Enum.TryParse<ScreenMode>(host.Config.Headset.Screen, out var mode) ? mode : ScreenMode.BaseStation;
+        _screenSleepMinutes = host.Config.Headset.ScreenSleepMinutes;
+        _oled.SleepAfter = _screenSleepMinutes > 0 ? TimeSpan.FromMinutes(_screenSleepMinutes) : null;
+        _oled.SleepChanged += (_, asleep) => OnPropertyChanged(nameof(ScreenSleepText));
+        RefreshScreenImages();
+        _selectedScreenImage = ScreenImages.FirstOrDefault(n => n == host.Config.Headset.ScreenImage) ?? ScreenImages.FirstOrDefault();
+        _oled.LoadCustom(ScreenImagePath(_selectedScreenImage));
+        WatchScreensFolder();
         UpdateOled();
         _oled.Mode = _screenMode;
     }
@@ -125,19 +141,92 @@ public sealed partial class MainViewModel : ObservableObject
     // ===== Base station screen =====
 
     public static IReadOnlyList<Option> ScreenOptions { get; } =
-        [new(ScreenMode.BaseStation, "Base station's own"), new(ScreenMode.Widget, "AudioMixer widget"), new(ScreenMode.Off, "Off")];
+        [new(ScreenMode.BaseStation, "Base station's own"), new(ScreenMode.Widget, "AudioMixer widget"), new(ScreenMode.Custom, "Your picture"), new(ScreenMode.Off, "Off")];
+
+    public static IReadOnlyList<Option> ScreenSleepOptions { get; } =
+        [new(0, "Never"), new(5, "5 min"), new(15, "15 min"), new(30, "30 min"), new(60, "1 hour"), new(120, "2 hours")];
+
+    /// <summary>File names in the Screens folder.</summary>
+    public ObservableCollection<string> ScreenImages { get; } = [];
+    [ObservableProperty] string? _selectedScreenImage;
+    [ObservableProperty] int _screenSleepMinutes;
+    public bool IsCustomScreen => ScreenMode == ScreenMode.Custom;
+    public string ScreenSleepText => _oled.IsAsleep ? "Asleep now. Use the keyboard, mouse or dial to wake it." : "";
+    FileSystemWatcher? _screensWatcher;
+
+    static string? ScreenImagePath(string? name) => name is null ? null : Path.Combine(OledWidget.ScreensFolder, name);
+
+    void RefreshScreenImages()
+    {
+        var names = Directory.Exists(OledWidget.ScreensFolder)
+            ? Directory.EnumerateFiles(OledWidget.ScreensFolder)
+                .Where(f => OledWidget.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .Select(Path.GetFileName).OfType<string>().OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList()
+            : [];
+        if (names.SequenceEqual(ScreenImages))
+            return;
+        var selected = SelectedScreenImage;
+        ScreenImages.Clear();
+        foreach (var n in names)
+            ScreenImages.Add(n);
+        SelectedScreenImage = names.Contains(selected ?? "") ? selected : names.FirstOrDefault();
+    }
+
+    void WatchScreensFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(OledWidget.ScreensFolder);
+            _screensWatcher = new FileSystemWatcher(OledWidget.ScreensFolder) { EnableRaisingEvents = true };
+            FileSystemEventHandler changed = (_, e) => _ui.BeginInvoke(() =>
+            {
+                RefreshScreenImages();
+                // A picture that is being used was replaced: show the new one.
+                if (string.Equals(e.Name, SelectedScreenImage, StringComparison.OrdinalIgnoreCase))
+                    _oled.LoadCustom(ScreenImagePath(SelectedScreenImage));
+            });
+            _screensWatcher.Created += changed;
+            _screensWatcher.Deleted += changed;
+            _screensWatcher.Changed += changed;
+            _screensWatcher.Renamed += (_, _) => _ui.BeginInvoke(RefreshScreenImages);
+        }
+        catch (Exception) { }
+    }
+
+    partial void OnSelectedScreenImageChanged(string? value)
+    {
+        if (_oled.LoadCustom(ScreenImagePath(value)) is { } error)
+            Toast(error, error: true);
+        QueueSave();
+    }
+
+    partial void OnScreenSleepMinutesChanged(int value)
+    {
+        _oled.SleepAfter = value > 0 ? TimeSpan.FromMinutes(value) : null;
+        QueueSave();
+        Toast(value > 0 ? $"The base station's screen turns off after {ScreenSleepOptions.First(o => (int)o.Value == value).Label} without use" : "Screen sleep off");
+    }
+
+    [RelayCommand]
+    void OpenScreensFolder()
+    {
+        Directory.CreateDirectory(OledWidget.ScreensFolder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(OledWidget.ScreensFolder) { UseShellExecute = true });
+    }
 
     [ObservableProperty] ScreenMode _screenMode;
     [ObservableProperty] System.Windows.Media.ImageSource? _oledPreview;
 
     partial void OnScreenModeChanged(ScreenMode value)
     {
+        OnPropertyChanged(nameof(IsCustomScreen));
         _oled.Mode = value;
         QueueSave();
         Toast(value switch
         {
             ScreenMode.Widget => "The base station now shows battery, mic and volume",
             ScreenMode.Off => "The base station's screen is off while AudioMixer runs",
+            ScreenMode.Custom => ScreenImages.Count == 0 ? "Put a picture or GIF in the Screens folder first" : $"The base station now shows {SelectedScreenImage}",
             _ => "The base station shows its own screen again",
         });
     }
@@ -965,7 +1054,13 @@ public sealed partial class MainViewModel : ObservableObject
             DefaultPlaybackChannel = old.DefaultPlaybackChannel,
             ChatMixEnabled = ChatMixEnabled,
             MixerChannels = ChannelToggles.Where(t => t.IsShown).Select(t => t.Channel).ToList(),
-            Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning, Screen = ScreenMode.ToString() },
+            Headset = new HeadsetConfig
+            {
+                LowBatteryWarningPercent = LowBatteryWarning,
+                Screen = ScreenMode.ToString(),
+                ScreenImage = SelectedScreenImage,
+                ScreenSleepMinutes = ScreenSleepMinutes,
+            },
             Channels = old.Channels,
         };
         _host.SaveConfig(config);
