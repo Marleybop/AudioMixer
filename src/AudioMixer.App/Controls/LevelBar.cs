@@ -41,6 +41,11 @@ public class LevelBar : FrameworkElement
     public static readonly DependencyProperty CapProperty = Register<Brush?>(nameof(Cap), null);
     public static readonly DependencyProperty CornerRadiusProperty = Register(nameof(CornerRadius), 3.0);
     public static readonly DependencyProperty IsReadOnlyProperty = Register(nameof(IsReadOnly), false);
+    /// <summary>Slider look: thickness of a slim track drawn across the middle (0 = fill the whole element).</summary>
+    public static readonly DependencyProperty TrackThicknessProperty = Register(nameof(TrackThickness), 0.0);
+    /// <summary>Diameter of the round handle drawn at the value (0 = none).</summary>
+    public static readonly DependencyProperty ThumbSizeProperty = Register(nameof(ThumbSize), 0.0);
+    public static readonly DependencyProperty ThumbProperty = Register<Brush?>(nameof(Thumb), Brushes.White);
 
     static DependencyProperty Register<T>(string name, T defaultValue) =>
         DependencyProperty.Register(name, typeof(T), typeof(LevelBar), new FrameworkPropertyMetadata(defaultValue, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -69,6 +74,9 @@ public class LevelBar : FrameworkElement
     public Brush? Cap { get => (Brush?)GetValue(CapProperty); set => SetValue(CapProperty, value); }
     public double CornerRadius { get => (double)GetValue(CornerRadiusProperty); set => SetValue(CornerRadiusProperty, value); }
     public bool IsReadOnly { get => (bool)GetValue(IsReadOnlyProperty); set => SetValue(IsReadOnlyProperty, value); }
+    public double TrackThickness { get => (double)GetValue(TrackThicknessProperty); set => SetValue(TrackThicknessProperty, value); }
+    public double ThumbSize { get => (double)GetValue(ThumbSizeProperty); set => SetValue(ThumbSizeProperty, value); }
+    public Brush? Thumb { get => (Brush?)GetValue(ThumbProperty); set => SetValue(ThumbProperty, value); }
 
     bool Vertical => Orientation == Orientation.Vertical;
     double Range => Math.Max(Maximum - Minimum, double.Epsilon);
@@ -103,6 +111,12 @@ public class LevelBar : FrameworkElement
             return;
         }
 
+        if (TrackThickness > 0)
+        {
+            DrawSlider(dc, w, h, lo, hi);
+            return;
+        }
+
         dc.DrawRoundedRectangle(Track, null, new Rect(0, 0, w, h), CornerRadius, CornerRadius);
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, w, h), CornerRadius, CornerRadius));
         dc.DrawRectangle(Fill, null, Vertical ? new Rect(0, h * (1 - hi), w, h * (hi - lo)) : new Rect(w * lo, 0, w * (hi - lo), h));
@@ -113,6 +127,39 @@ public class LevelBar : FrameworkElement
         }
         dc.Pop();
         DrawFocus(dc, w, h);
+    }
+
+    /// <summary>A slim track with the filled part, an optional hot (clipping) part and a round handle.</summary>
+    void DrawSlider(DrawingContext dc, double w, double h, double lo, double hi)
+    {
+        var t = Math.Min(TrackThickness, Vertical ? w : h);
+        var inset = ThumbSize / 2; // keep the handle inside the element at both ends
+        var length = Math.Max((Vertical ? h : w) - 2 * inset, 1);
+        Rect Span(double a, double b) => Vertical
+            ? new Rect((w - t) / 2, inset + length * (1 - b), t, length * (b - a))
+            : new Rect(inset + length * a, (h - t) / 2, length * (b - a), t);
+
+        dc.DrawRoundedRectangle(Track, null, Span(0, 1), t / 2, t / 2);
+        if (hi > lo)
+        {
+            if (HotFill is not null && hi > HotFraction)
+            {
+                dc.DrawRoundedRectangle(Fill, null, Span(lo, Math.Min(hi, HotFraction)), t / 2, t / 2);
+                dc.DrawRoundedRectangle(HotFill, null, Span(Math.Max(lo, HotFraction), hi), t / 2, t / 2);
+            }
+            else
+            {
+                dc.DrawRoundedRectangle(Fill, null, Span(lo, hi), t / 2, t / 2);
+            }
+        }
+        if (ThumbSize > 0)
+        {
+            var f = Fraction(Value);
+            var c = Vertical ? new Point(w / 2, inset + length * (1 - f)) : new Point(inset + length * f, h / 2);
+            dc.DrawEllipse(Thumb, new Pen(Fill, 2), c, ThumbSize / 2, ThumbSize / 2);
+            if (IsKeyboardFocused)
+                dc.DrawEllipse(null, new Pen(Fill, 1.5), c, ThumbSize / 2 + 4, ThumbSize / 2 + 4);
+        }
     }
 
     void DrawFocus(DrawingContext dc, double w, double h)
@@ -153,10 +200,20 @@ public class LevelBar : FrameworkElement
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
-        if (IsReadOnly)
+        // In a page that scrolls, the wheel scrolls the page unless you've clicked into this bar first;
+        // otherwise scrolling past a bar would quietly change its setting.
+        if (IsReadOnly || (!IsKeyboardFocused && InScrollingPage()))
             return;
         SetClamped(Value + Math.Sign(e.Delta) * SmallChange);
         e.Handled = true;
+    }
+
+    bool InScrollingPage()
+    {
+        for (DependencyObject? d = VisualTreeHelper.GetParent(this); d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is ScrollViewer { ScrollableHeight: > 0 })
+                return true;
+        return false;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -184,7 +241,10 @@ public class LevelBar : FrameworkElement
 
     void SetFromPoint(Point p)
     {
-        var f = Vertical ? 1 - p.Y / Math.Max(ActualHeight, 1) : p.X / Math.Max(ActualWidth, 1);
+        var inset = TrackThickness > 0 ? ThumbSize / 2 : 0;
+        var f = Vertical
+            ? 1 - (p.Y - inset) / Math.Max(ActualHeight - 2 * inset, 1)
+            : (p.X - inset) / Math.Max(ActualWidth - 2 * inset, 1);
         SetClamped(Minimum + Math.Clamp(f, 0, 1) * Range);
     }
 

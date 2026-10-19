@@ -29,6 +29,8 @@ public sealed class NovaProWireless : IDisposable
     public event EventHandler<(int Game, int Chat)>? ChatMixChanged;
     /// <summary>The base station volume dial moved (0–56).</summary>
     public event EventHandler<int>? VolumeChanged;
+    /// <summary>A setting was changed on the base station itself (the command byte of the setting).</summary>
+    public event EventHandler<byte>? SettingsChanged;
     /// <summary>Any report from the device (for diagnostics).</summary>
     public event EventHandler<byte[]>? ReportReceived;
 
@@ -118,6 +120,13 @@ public sealed class NovaProWireless : IDisposable
             case NovaProProtocol.VolumeEvent when report[0] == NovaProProtocol.SyncReportId:
                 VolumeChanged?.Invoke(this, report[2]);
                 break;
+            case var c when report[0] == NovaProProtocol.SyncReportId && NovaProProtocol.SettingEchoes.Contains(c):
+                // Changed on the base station's own menu: let the UI re-read its settings.
+                SettingsChanged?.Invoke(this, c);
+                if (c is NovaProProtocol.MutedMicBrightness or NovaProProtocol.PowerInactivityTimer
+                    or NovaProProtocol.WirelessMode or NovaProProtocol.BluetoothStartup or NovaProProtocol.BluetoothCallMode)
+                    _ = Task.Run(RefreshStatus);
+                break;
         }
     }
 
@@ -167,6 +176,9 @@ public sealed class NovaProWireless : IDisposable
     public async Task<BaseAudioSettings> GetAudioSettingsAsync() =>
         BaseAudioSettings.FromReport(await QueryAsync(NovaProProtocol.AudioSettings));
 
+    public async Task<FirmwareVersions> GetFirmwareAsync() =>
+        FirmwareVersions.FromReport(await QueryAsync(NovaProProtocol.FirmwareVersions));
+
     public async Task<BaseUxSettings> GetUxSettingsAsync() =>
         BaseUxSettings.FromReport(await QueryAsync(NovaProProtocol.UxSettings));
 
@@ -198,6 +210,37 @@ public sealed class NovaProWireless : IDisposable
         }
     }
 
+    /// <summary>Shows an image on the base station's screen until <see cref="ShowBaseStationScreen"/> (or its own UI redraws).</summary>
+    public void DrawOled(OledFrame frame)
+    {
+        lock (_writeLock)
+        {
+            var stream = _command ?? throw new InvalidOperationException("Base station not connected.");
+            var length = stream.Device.GetMaxFeatureReportLength();
+            try
+            {
+                foreach (var report in frame.ToReports())
+                {
+                    var buffer = new byte[Math.Max(length, report.Length)];
+                    report.CopyTo(buffer, 0);
+                    var wait = _lastWrite + MinCommandGap - DateTime.UtcNow;
+                    if (wait > TimeSpan.Zero)
+                        Thread.Sleep(wait);
+                    stream.SetFeature(buffer);
+                    _lastWrite = DateTime.UtcNow;
+                }
+            }
+            catch (IOException)
+            {
+                Disconnect();
+                throw;
+            }
+        }
+    }
+
+    /// <summary>Gives the screen back to the base station's own display.</summary>
+    public void ShowBaseStationScreen() => Send(NovaProProtocol.ReloadDisplay);
+
     // ---- Typed settings ----
 
     public void SetCustomEq(IReadOnlyList<double> bandsDb)
@@ -215,14 +258,17 @@ public sealed class NovaProWireless : IDisposable
     /// <summary>Selects a stored EQ preset: 0 Flat, 1 Bass boost, 2 Focus, 3 Smiley, 4 Custom, 5–18 game presets.</summary>
     public void SetEqPreset(int preset) => Send(NovaProProtocol.EqPreset, (byte)Math.Clamp(preset, 0, 18));
     public void SetLineOutMode(LineOutMode mode) => Send(NovaProProtocol.LineOutMode, (byte)mode);
+    /// <summary>Levels (0–100) of the line out's stream mix: main audio, aux, mic. Byte 3 of the command is unused.</summary>
+    public void SetStreamMix(int main, int aux, int mic) =>
+        Send(NovaProProtocol.StreamMix, (byte)Math.Clamp(main, 0, 100), 0, (byte)Math.Clamp(aux, 0, 100), (byte)Math.Clamp(mic, 0, 100));
     /// <summary>Dims the base station screen after this many minutes (0 = never); see <see cref="NovaProProtocol.TimerMinutes"/>.</summary>
-    public void SetDimTimer(int minutes) => Send(NovaProProtocol.DimTimer, (byte)Math.Clamp(minutes, 0, 60));
+    public void SetDimTimer(int minutes) => Send(NovaProProtocol.DimTimer, NovaProProtocol.MinutesToTimerStep(minutes));
     public void SetSimpleHomeScreen(bool simple) => Send(NovaProProtocol.HomeScreenType, (byte)(simple ? 1 : 0));
     public void SetBluetoothOnAtStartup(bool on) => Send(NovaProProtocol.BluetoothStartup, (byte)(on ? 1 : 0));
     public void SetBluetoothCallMode(BluetoothCallMode mode) => Send(NovaProProtocol.BluetoothCallMode, (byte)mode);
     public void SetMutedMicBrightness(int level) => Send(NovaProProtocol.MutedMicBrightness, (byte)Math.Clamp(level, 1, 10));
     /// <summary>Puts the headset to sleep after this many idle minutes (0 = never); see <see cref="NovaProProtocol.TimerMinutes"/>.</summary>
-    public void SetSleepTimer(int minutes) => Send(NovaProProtocol.PowerInactivityTimer, (byte)Math.Clamp(minutes, 0, 60));
+    public void SetSleepTimer(int minutes) => Send(NovaProProtocol.PowerInactivityTimer, NovaProProtocol.MinutesToTimerStep(minutes));
     /// <summary>Speed (lower latency) or Range mode for the 2.4 GHz link.</summary>
     public void SetRangeMode(bool range) => Send(NovaProProtocol.WirelessMode, (byte)(range ? 1 : 0));
     /// <summary>Stores the current settings in the base station's flash so they survive a power cycle.</summary>

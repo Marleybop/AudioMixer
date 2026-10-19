@@ -12,7 +12,11 @@ public sealed record RouteState(
     bool SonarActive,
     bool MicBridgeRunning,
     HeadsetStatus? Headset,
-    IReadOnlyList<string> Problems);
+    IReadOnlyList<string> Problems)
+{
+    /// <summary>Where each playback channel actually goes (differs from <see cref="Output"/> when a channel has its own device).</summary>
+    public IReadOnlyDictionary<Channel, AudioEndpoint?> ChannelOutputs { get; init; } = new Dictionary<Channel, AudioEndpoint?>();
+}
 
 /// <summary>
 /// Decides which physical output and microphone to use from the user's priority lists and live device state
@@ -31,10 +35,19 @@ public sealed class Router : IDisposable
     readonly Timer _evaluateTimer;
     AppConfig _config;
     MicBridge? _micBridge;
-    string? _appliedOutputId;
+    readonly Dictionary<Channel, string?> _appliedOutputs = new();
     bool _disposed;
 
     public RouteState State { get; private set; } = new(null, null, false, false, null, []);
+
+    /// <summary>Echo cancelling on the mic needs to know what each channel plays on (as Sonar does).</summary>
+    static ApoSetting AecDeviceSetting(Channel channel) => channel switch
+    {
+        Channel.Game => ApoSetting.AECGameDeviceId,
+        Channel.Chat => ApoSetting.AECChatRenderDeviceId,
+        Channel.Media => ApoSetting.AECMediaDeviceId,
+        _ => ApoSetting.AECAuxDeviceId,
+    };
 
     public event EventHandler<RouteState>? StateChanged;
 
@@ -82,20 +95,22 @@ public sealed class Router : IDisposable
             EnforceBlocklist(all, problems);
 
             var output = FirstAvailable(_config.OutputPriority, all, EndpointFlow.Output, headset);
-            var input = FirstAvailable(_config.InputPriority, all, EndpointFlow.Input, headset);
+            var input = Pinned(Channel.Mic, all, EndpointFlow.Input, headset)
+                ?? FirstAvailable(_config.InputPriority, all, EndpointFlow.Input, headset);
             if (output is null && _config.OutputPriority.Count > 0)
                 problems.Add("None of the preferred outputs is available.");
 
+            var channelOutputs = RenderChannels.ToDictionary(c => c, c => Pinned(c, all, EndpointFlow.Output, headset) ?? output);
             var sonarActive = _sonar is not null && SonarEndpoint(all, Channel.Game, EndpointFlow.Output) is not null;
             if (sonarActive)
             {
-                ApplySonarRouting(output, problems);
+                ApplySonarRouting(channelOutputs, problems);
                 ApplyMicBridge(input, all, problems);
             }
             if (_config.ManageWindowsDefaults)
                 ApplyWindowsDefaults(all, output, input, sonarActive, problems);
 
-            SetState(new RouteState(output, input, sonarActive, _micBridge is not null, headset, problems));
+            SetState(new RouteState(output, input, sonarActive, _micBridge is not null, headset, problems) { ChannelOutputs = channelOutputs });
         }
     }
 
@@ -113,6 +128,12 @@ public sealed class Router : IDisposable
         }
         return null;
     }
+
+    /// <summary>The device a channel is pinned to, if it has one and it can be used right now.</summary>
+    AudioEndpoint? Pinned(Channel channel, IReadOnlyList<AudioEndpoint> all, EndpointFlow flow, HeadsetStatus? headset) =>
+        _config.Channels.TryGetValue(channel, out var c) && c.Device is { } device
+            ? FirstAvailable([device], all, flow, headset)
+            : null;
 
     bool IsBlocked(AudioEndpoint endpoint) => _config.Blocked.Any(b => b.Id == endpoint.Id);
 
@@ -134,20 +155,23 @@ public sealed class Router : IDisposable
     static AudioEndpoint? SonarEndpoint(IReadOnlyList<AudioEndpoint> all, Channel channel, EndpointFlow flow) =>
         all.FirstOrDefault(e => e.SonarChannel == channel && e.Flow == flow && e.State == EndpointState.Active);
 
-    void ApplySonarRouting(AudioEndpoint? output, List<string> problems)
+    void ApplySonarRouting(Dictionary<Channel, AudioEndpoint?> outputs, List<string> problems)
     {
-        if (output?.Id == _appliedOutputId)
-            return;
-        try
+        foreach (var (channel, output) in outputs)
         {
-            foreach (var channel in RenderChannels)
+            if (_appliedOutputs.TryGetValue(channel, out var applied) && applied == output?.Id)
+                continue;
+            try
+            {
                 _sonar!.SetOutputDevice(channel, output?.Id);
-            _appliedOutputId = output?.Id;
-        }
-        catch (Exception e)
-        {
-            problems.Add($"Couldn't route channels: {e.Message}");
-            _appliedOutputId = null;
+                _sonar.SetString(Channel.Mic, AecDeviceSetting(channel), output?.Id ?? "");
+                _appliedOutputs[channel] = output?.Id;
+            }
+            catch (Exception e)
+            {
+                problems.Add($"Couldn't route {channel}: {e.Message}");
+                _appliedOutputs.Remove(channel);
+            }
         }
     }
 
@@ -241,7 +265,8 @@ public sealed class Router : IDisposable
     {
         var changed = state.Output?.Id != State.Output?.Id || state.Input?.Id != State.Input?.Id
             || state.SonarActive != State.SonarActive || state.MicBridgeRunning != State.MicBridgeRunning
-            || state.Headset != State.Headset || !state.Problems.SequenceEqual(State.Problems);
+            || state.Headset != State.Headset || !state.Problems.SequenceEqual(State.Problems)
+            || state.ChannelOutputs.Any(kv => !State.ChannelOutputs.TryGetValue(kv.Key, out var old) || old?.Id != kv.Value?.Id);
         State = state;
         if (changed)
             StateChanged?.Invoke(this, state);

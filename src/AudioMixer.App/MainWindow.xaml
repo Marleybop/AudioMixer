@@ -1,190 +1,249 @@
-﻿<Window x:Class="AudioMixer.App.MainWindow"
+<Window x:Class="AudioMixer.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:AudioMixer.App.ViewModels"
         xmlns:c="clr-namespace:AudioMixer.App.Controls"
-        Title="AudioMixer" Icon="/Assets/AudioMixer.ico" Width="1280" Height="800" MinWidth="1040" MinHeight="660"
+        Title="AudioMixer" Icon="/Assets/AudioMixer.ico" Width="1320" Height="840" MinWidth="1100" MinHeight="700"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}" WindowStartupLocation="CenterScreen"
         FontFamily="{StaticResource UiFont}" FontSize="14"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
     <Window.Resources>
-        <!-- ===== Shell: title bar with the section tabs, banners, and the selected page ===== -->
+        <!-- ===== Shell: sidebar navigation, banners, the selected page and the toast ===== -->
         <ControlTemplate x:Key="Shell" TargetType="TabControl">
-            <DockPanel>
-                <Border DockPanel.Dock="Top" Height="56" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="20,0">
-                    <DockPanel>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,28,0">
-                            <Path Data="M4,18 V9 M9,18 V4 M14,18 V11 M19,18 V7" Stroke="{StaticResource Accent}" StrokeThickness="2.4"
-                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="22" Height="22"/>
-                            <TextBlock Text="AUDIOMIXER" FontWeight="Bold" FontSize="15" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="232"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Sidebar -->
+                <Border Background="{StaticResource Sidebar}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+                    <DockPanel Margin="14,22,14,16">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,0,0,26">
+                            <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource AccentSoft}">
+                                <Path Data="M4,18 V9 M9,18 V4 M14,18 V11 M19,18 V7" Stroke="{StaticResource Accent}" StrokeThickness="2.2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="Uniform"/>
+                            </Border>
+                            <TextBlock Text="AudioMixer" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="17" Margin="10,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding HeaderStatus}" Style="{StaticResource Mono}" Foreground="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                        <Ellipse DockPanel.Dock="Right" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <Ellipse.Style>
-                                <Style TargetType="Ellipse">
-                                    <Setter Property="Fill" Value="{StaticResource Faint}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HeadsetOn}" Value="True">
-                                            <Setter Property="Fill" Value="{StaticResource Good}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Ellipse.Style>
-                        </Ellipse>
-                        <Border Background="{StaticResource Well}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Padding="3"
-                                HorizontalAlignment="Left" VerticalAlignment="Center">
-                            <TabPanel IsItemsHost="True"/>
+
+                        <!-- Headset at a glance -->
+                        <Border DockPanel.Dock="Bottom" Background="{StaticResource Panel}" CornerRadius="10" Padding="14,12">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource Faint}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HeadsetOn}" Value="True">
+                                                        <Setter Property="Fill" Value="{StaticResource Good}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding HeadsetBattery, StringFormat={}{0}%}" DockPanel.Dock="Right" Style="{StaticResource Mono}"
+                                               Visibility="{Binding HeadsetOn, Converter={StaticResource BoolToVis}}"/>
+                                    <TextBlock Text="Nova Pro" FontWeight="SemiBold" FontSize="13"/>
+                                </DockPanel>
+                                <c:LevelBar Style="{StaticResource GaugeBar}" Value="{Binding HeadsetBattery, Mode=OneWay}" Margin="0,8,0,6"
+                                            Visibility="{Binding HeadsetOn, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Headset battery"/>
+                                <TextBlock Text="{Binding HeadsetStateText}" Style="{StaticResource Label}" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
                         </Border>
+
+                        <StackPanel IsItemsHost="True"/>
                     </DockPanel>
                 </Border>
 
-                <!-- GG still running: we only watch -->
-                <Border DockPanel.Dock="Top" Background="#33E8A33D" BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,1" Padding="20,10"
-                        Visibility="{Binding GgIsRunning, Converter={StaticResource BoolToVis}}">
-                    <DockPanel>
-                        <Button DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Take over from SteelSeries GG" Command="{Binding TakeOverCommand}"/>
-                        <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0"
-                                   Text="SteelSeries GG is running, so AudioMixer is only watching. Take over to let AudioMixer run routing, ChatMix and your mic. GG is stopped and won't start with Windows; you can undo this in Settings."/>
-                    </DockPanel>
-                </Border>
-
-                <!-- Problems -->
-                <Border DockPanel.Dock="Bottom" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,8">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Problems}" Value="">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <TextBlock Text="{Binding Problems}" Foreground="{StaticResource Bad}" TextWrapping="Wrap"/>
-                </Border>
-
-                <ContentPresenter ContentSource="SelectedContent" Margin="18,16"/>
-            </DockPanel>
-        </ControlTemplate>
-
-        <!-- ===== One channel strip ===== -->
-        <DataTemplate x:Key="Strip" DataType="{x:Type vm:ChannelStripViewModel}">
-            <Border Background="{StaticResource PanelHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Margin="5,0" Padding="10">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Height="3" Background="{Binding Color}" CornerRadius="2" Margin="-10,-10,-10,10"/>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding Name, Converter={StaticResource Upper}}" FontWeight="Bold" FontSize="17"/>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding Apps}" Style="{StaticResource Label}" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Apps}" Margin="0,2,0,10"/>
-
-                    <!-- Where it goes -->
-                    <Border DockPanel.Dock="Top" Background="{StaticResource Well}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4" Padding="8,7">
-                        <TextBlock TextTrimming="CharacterEllipsis" FontSize="13">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                    <Setter Property="Text" Value="{Binding DataContext.OutputName, RelativeSource={RelativeSource AncestorType=Window}, StringFormat=→ {0}}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMic}" Value="True">
-                                            <Setter Property="Text" Value="→ Virtual mic (apps record this)"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                <!-- Page -->
+                <DockPanel Grid.Column="1">
+                    <!-- GG still running: we only watch -->
+                    <Border DockPanel.Dock="Top" Background="{StaticResource PanelHi}" CornerRadius="10" Margin="28,20,28,0" Padding="18,12"
+                            Visibility="{Binding GgIsRunning, Converter={StaticResource BoolToVis}}">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="Take over from SteelSeries GG" Command="{Binding TakeOverCommand}"/>
+                            <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" Foreground="{StaticResource Accent}" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0" Foreground="{StaticResource Subtle}"
+                                       Text="SteelSeries GG is running, so AudioMixer is only watching. Take over to let AudioMixer handle routing, ChatMix and your mic. GG won't start with Windows any more; you can undo that in Settings."/>
+                        </DockPanel>
                     </Border>
-                    <Border DockPanel.Dock="Top" Background="{StaticResource Well}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4" Padding="8,7" Margin="0,6,0,0">
+
+                    <!-- Problems -->
+                    <Border DockPanel.Dock="Bottom" Background="{StaticResource BadSoft}" CornerRadius="10" Margin="28,0,28,16" Padding="16,10">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding EqText}" Value="">
+                                    <DataTrigger Binding="{Binding Problems}" Value="">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <TextBlock Text="{Binding EqText, StringFormat=EQ · {0}}" FontSize="13"/>
+                        <TextBlock Text="{Binding Problems}" Foreground="{StaticResource Bad}" TextWrapping="Wrap"/>
                     </Border>
 
-                    <!-- Mute -->
-                    <ToggleButton DockPanel.Dock="Bottom" Margin="0,10,0,0" Style="{StaticResource MuteBox}" Content="MUTE" IsChecked="{Binding Muted}"
-                                  AutomationProperties.Name="{Binding Name, StringFormat=Mute {0}}"/>
+                    <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="28,22,28,24"/>
+                </DockPanel>
 
-                    <!-- Volume value -->
-                    <TextBlock DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,14,0,8" FontFamily="{StaticResource MonoFont}" FontSize="22" FontWeight="SemiBold">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                <Setter Property="Text" Value="{Binding Volume, StringFormat={}{0:0}}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Muted}" Value="True">
-                                        <Setter Property="Text" Value="MUTED"/>
-                                        <Setter Property="Foreground" Value="{StaticResource Bad}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Volume bar + live meter -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
-                        </Grid.ColumnDefinitions>
-                        <c:LevelBar Value="{Binding Volume}" Cap="{StaticResource Text}" SmallChange="2" MaxWidth="76" Margin="0,0,8,0"
-                                    AutomationProperties.Name="{Binding Name, StringFormat={}{0} volume}">
-                            <c:LevelBar.Style>
-                                <Style TargetType="c:LevelBar" BasedOn="{StaticResource {x:Type c:LevelBar}}">
-                                    <Setter Property="Fill" Value="{Binding Color}"/>
+                <!-- Toast: confirms each change -->
+                <Border Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,26,0,0" Padding="16,11" CornerRadius="10"
+                        Background="#F02C2F36" BorderBrush="{StaticResource LineHi}" BorderThickness="1" IsHitTestVisible="False" MaxWidth="640">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+                    </Border.Effect>
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Opacity" Value="0"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ToastVisible}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.4"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,10,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="&#xE73E;"/>
+                                    <Setter Property="Foreground" Value="{StaticResource Good}"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Muted}" Value="True">
-                                            <Setter Property="Fill" Value="{StaticResource LineHi}"/>
+                                        <DataTrigger Binding="{Binding ToastIsError}" Value="True">
+                                            <Setter Property="Text" Value="&#xE7BA;"/>
+                                            <Setter Property="Foreground" Value="{StaticResource Warn}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </c:LevelBar.Style>
-                        </c:LevelBar>
-                        <c:LevelBar Grid.Column="1" Value="{Binding Peak, Mode=OneWay}" IsReadOnly="True" Focusable="False" Segments="30"
-                                    Fill="{StaticResource Good}" HotFill="{StaticResource Bad}" HotFraction="0.9" Track="{StaticResource SegOff}"
-                                    Cursor="Arrow" AutomationProperties.Name="{Binding Name, StringFormat={}{0} level}"/>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding ToastText}" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="580"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ControlTemplate>
+
+        <!-- ===== One channel strip ===== -->
+        <DataTemplate x:Key="Strip" DataType="{x:Type vm:ChannelStripViewModel}">
+            <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,14,0">
+                <DockPanel>
+                    <!-- Name -->
+                    <DockPanel DockPanel.Dock="Top">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE711;" Width="28" MinHeight="28" FontSize="11"
+                                Margin="0,-6,-8,0" VerticalAlignment="Top" ToolTip="Remove this channel (turns it off in Windows too)"
+                                AutomationProperties.Name="{Binding Name, StringFormat=Remove {0}}"
+                                Visibility="{Binding IsRemovable, Converter={StaticResource BoolToVis}}"
+                                Command="{Binding DataContext.RemoveChannelCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                        <Border Width="10" Height="10" CornerRadius="5" Background="{Binding Color}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Apps}" Style="{StaticResource Label}" FontSize="12" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Apps}" Margin="20,2,0,14"/>
+
+                    <!-- Where it goes (or, for the mic, where it comes from) -->
+                    <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding DeviceChoices}" SelectedItem="{Binding SelectedDevice}"
+                              IsEnabled="{Binding DataContext.IsActive, RelativeSource={RelativeSource AncestorType=Window}}"
+                              ToolTip="{Binding DeviceName}" AutomationProperties.Name="{Binding Name, StringFormat={}{0} device}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:DeviceChoice}">
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <!-- EQ: opens this channel's EQ & effects page -->
+                    <Button DockPanel.Dock="Top" Style="{StaticResource ChipButton}" Margin="0,8,0,0"
+                            Command="{Binding DataContext.OpenSoundCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                            ToolTip="Open this channel's EQ and effects" AutomationProperties.Name="{Binding Name, StringFormat={}{0} EQ and effects}"
+                            Visibility="{Binding Sound, Converter={StaticResource NullToCollapsed}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="10" Foreground="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                            <TextBlock Text="&#xE9E9;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding Sound.PresetLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Button>
+
+                    <!-- Mute -->
+                    <ToggleButton DockPanel.Dock="Bottom" Margin="0,14,0,0" Style="{StaticResource MuteBox}" IsChecked="{Binding Muted}"
+                                  AutomationProperties.Name="{Binding Name, StringFormat=Mute {0}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="muteIcon" Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                            <TextBlock x:Name="muteText" Text="Mute" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <!-- Volume -->
+                    <TextBlock x:Name="volume" DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,18,0,10" FontFamily="{StaticResource DisplayFont}"
+                               FontSize="30" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" Text="{Binding Volume, StringFormat={}{0:0}}"/>
+                    <Grid HorizontalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44"/>
+                            <ColumnDefinition Width="10"/>
+                        </Grid.ColumnDefinitions>
+                        <c:LevelBar x:Name="fader" Value="{Binding Volume}" SmallChange="2" TrackThickness="8" ThumbSize="24" Fill="{Binding Color}"
+                                    AutomationProperties.Name="{Binding Name, StringFormat={}{0} volume}"/>
+                        <c:LevelBar Grid.Column="1" Value="{Binding Peak, Mode=OneWay}" IsReadOnly="True" Focusable="False" Cursor="Arrow"
+                                    TrackThickness="4" ThumbSize="0" Fill="{StaticResource Good}" HotFill="{StaticResource Bad}" HotFraction="0.92"
+                                    Margin="0,12" AutomationProperties.Name="{Binding Name, StringFormat={}{0} level}"/>
                     </Grid>
                 </DockPanel>
             </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Muted}" Value="True">
+                    <Setter TargetName="fader" Property="Fill" Value="{StaticResource LineHi}"/>
+                    <Setter TargetName="volume" Property="Foreground" Value="{StaticResource Faint}"/>
+                    <Setter TargetName="muteIcon" Property="Text" Value="&#xE74F;"/>
+                    <Setter TargetName="muteText" Property="Text" Value="Muted"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
         <!-- ===== One device in a priority list ===== -->
         <DataTemplate x:Key="DeviceRow" DataType="{x:Type vm:DeviceItemViewModel}">
-            <Border x:Name="row" Background="{StaticResource PanelHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="26"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding RankText}" Style="{StaticResource Mono}" FontSize="14" Foreground="{StaticResource Faint}" VerticalAlignment="Center"/>
-                    <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" IsEnabled="{Binding Blocked, Converter={StaticResource Invert}}" VerticalAlignment="Center"
+            <Border x:Name="row" Background="{StaticResource PanelHi}" CornerRadius="10" Padding="12,8" Margin="0,0,0,6" BorderBrush="Transparent" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding RankText}" Style="{StaticResource Mono}" Foreground="{StaticResource Faint}" Width="18" VerticalAlignment="Center"/>
+                    <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" IsEnabled="{Binding Blocked, Converter={StaticResource Invert}}" VerticalAlignment="Center"
                               ToolTip="Use this device when it's available" AutomationProperties.Name="{Binding Name, StringFormat=Use {0}}" Margin="0"/>
-                    <StackPanel Grid.Column="2" Margin="6,0,10,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="name" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                        <TextBlock x:Name="state" Text="{Binding StateText}" Style="{StaticResource Label}"/>
+                    <ToggleButton DockPanel.Dock="Right" Style="{StaticResource MuteBox}" Width="76" MinHeight="32" FontSize="12" IsChecked="{Binding Blocked}"
+                                  ToolTip="Keep this device disabled so nothing can use it" AutomationProperties.Name="{Binding Name, StringFormat=Block {0}}">
+                        <TextBlock x:Name="blockText" Text="Block" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                    </ToggleButton>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70D;" Width="28" ToolTip="Move down" AutomationProperties.Name="Move down" Margin="0,0,6,0"
+                            Command="{Binding DataContext.MoveDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE70E;" Width="28" ToolTip="Move up" AutomationProperties.Name="Move up"
+                            Command="{Binding DataContext.MoveUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                    <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="name" Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                        <TextBlock x:Name="state" Text="{Binding StateText}" Style="{StaticResource Label}" FontSize="12"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="3" Orientation="Horizontal">
-                        <Button Style="{StaticResource IconButton}" Content="&#xE70E;" ToolTip="Move up" AutomationProperties.Name="Move up"
-                                Command="{Binding DataContext.MoveUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                        <Button Style="{StaticResource IconButton}" Content="&#xE70D;" ToolTip="Move down" AutomationProperties.Name="Move down" Margin="4,0"
-                                Command="{Binding DataContext.MoveDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                        <ToggleButton Style="{StaticResource MuteBox}" Content="BLOCK" Width="64" MinHeight="34" FontSize="12" IsChecked="{Binding Blocked}"
-                                      ToolTip="Keep this device disabled so nothing can use it" AutomationProperties.Name="{Binding Name, StringFormat=Block {0}}"/>
-                    </StackPanel>
-                </Grid>
+                </DockPanel>
             </Border>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                    <Setter TargetName="row" Property="BorderBrush" Value="#FF2F5A37"/>
-                    <Setter TargetName="row" Property="Background" Value="#FF22261F"/>
+                    <Setter TargetName="row" Property="BorderBrush" Value="#664CC38A"/>
                     <Setter TargetName="state" Property="Foreground" Value="{StaticResource Good}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Blocked}" Value="True">
                     <Setter TargetName="state" Property="Foreground" Value="{StaticResource Bad}"/>
-                    <Setter TargetName="name" Property="TextDecorations" Value="Strikethrough"/>
+                    <Setter TargetName="name" Property="Foreground" Value="{StaticResource Faint}"/>
+                    <Setter TargetName="blockText" Property="Text" Value="Blocked"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="{x:Null}">
                     <Setter TargetName="row" Property="Opacity" Value="0.6"/>
@@ -192,280 +251,567 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- Small status pill on the headset card -->
+        <Style x:Key="Pill" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelHi}"/>
+            <Setter Property="CornerRadius" Value="15"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
     </Window.Resources>
 
-    <TabControl Template="{StaticResource Shell}" Background="Transparent" BorderThickness="0">
+    <TabControl Template="{StaticResource Shell}" Background="Transparent" BorderThickness="0" SelectedIndex="{Binding SelectedTab}">
 
         <!-- ================= MIXER ================= -->
-        <TabItem Header="MIXER">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300"/>
-                    <ColumnDefinition Width="14"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+        <TabItem Header="Mixer" Tag="&#xE767;">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Mixer" Style="{StaticResource PageTitle}" Margin="0,0,0,16"/>
 
-                <!-- Headset quick panel -->
-                <Border Style="{StaticResource Card}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,-8,0" Padding="0,0,8,0">
-                        <StackPanel IsEnabled="{Binding BaseStationConnected}">
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
-                                            <Setter Property="Foreground" Value="{StaticResource Subtle}"/>
-                                            <Setter Property="Text" Value="OFF"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HeadsetOn}" Value="True">
-                                                    <Setter Property="Text" Value="2.4 GHz"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <TextBlock Text="NOVA PRO WIRELESS" FontWeight="Bold" FontSize="14"/>
-                            </DockPanel>
-
-                            <!-- Headset drawing + batteries -->
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="110"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Viewbox Width="100" Height="94" VerticalAlignment="Center">
-                                    <Canvas Width="120" Height="112">
-                                        <Path Data="M22,62 V50 A38,38 0 0 1 98,50 V62" Stroke="#FFC9C6BF" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                        <Path Data="M30,22 A38,38 0 0 1 90,22" Stroke="#FF5A5D64" StrokeThickness="7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                        <Rectangle Canvas.Left="12" Canvas.Top="56" Width="24" Height="40" RadiusX="10" RadiusY="10" Fill="{StaticResource PanelHi}" Stroke="#FFC9C6BF" StrokeThickness="2.5"/>
-                                        <Rectangle Canvas.Left="84" Canvas.Top="56" Width="24" Height="40" RadiusX="10" RadiusY="10" Fill="{StaticResource PanelHi}" Stroke="#FFC9C6BF" StrokeThickness="2.5"/>
-                                        <Path x:Name="boom" Data="M16,90 C12,100 22,108 38,108 H48" StrokeThickness="2.5" StrokeEndLineCap="Round">
-                                            <Path.Style>
-                                                <Style TargetType="Path">
-                                                    <Setter Property="Stroke" Value="{StaticResource Good}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMicSilenced}" Value="True">
-                                                            <Setter Property="Stroke" Value="{StaticResource Bad}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Path.Style>
-                                        </Path>
-                                        <Ellipse Canvas.Left="47" Canvas.Top="104" Width="8" Height="8" Fill="{Binding Stroke, ElementName=boom}"/>
-                                    </Canvas>
-                                </Viewbox>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <DockPanel>
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding HeadsetBattery, StringFormat={}{0}%}" Style="{StaticResource Mono}"/>
-                                        <TextBlock Text="HEADSET" Style="{StaticResource Label}"/>
-                                    </DockPanel>
-                                    <c:LevelBar Value="{Binding HeadsetBattery, Mode=OneWay}" IsReadOnly="True" Focusable="False" Cursor="Arrow" Orientation="Horizontal"
-                                                Segments="8" Height="12" Margin="0,4,0,12" Fill="{StaticResource Good}" Track="{StaticResource SegOff}"
-                                                AutomationProperties.Name="Headset battery"/>
-                                    <DockPanel>
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding SpareBattery, StringFormat={}{0}%}" Style="{StaticResource Mono}"/>
-                                        <TextBlock Text="SPARE" Style="{StaticResource Label}"/>
-                                    </DockPanel>
-                                    <c:LevelBar Value="{Binding SpareBattery, Mode=OneWay}" IsReadOnly="True" Focusable="False" Cursor="Arrow" Orientation="Horizontal"
-                                                Segments="8" Height="12" Margin="0,4,0,0" Fill="{StaticResource Good}" Track="{StaticResource SegOff}"
-                                                AutomationProperties.Name="Spare battery"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <!-- Quick tiles -->
-                            <UniformGrid Columns="2" Margin="-4,14,-4,0">
-                                <Button Style="{StaticResource TileButton}" Margin="4" Command="{Binding ToggleMicMuteCommand}" ToolTip="Mute or unmute the mic for every app">
-                                    <StackPanel>
-                                        <TextBlock Text="MIC" Style="{StaticResource Label}"/>
-                                        <TextBlock FontSize="15" FontWeight="Bold" Text="{Binding MicStatusText}" TextTrimming="CharacterEllipsis">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource Good}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMicSilenced}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource Bad}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Button>
-                                <Border Margin="4" Padding="10,8" CornerRadius="4" BorderBrush="{StaticResource Line}" BorderThickness="1" Background="{StaticResource Well}">
-                                    <StackPanel>
-                                        <TextBlock Text="NOISE" Style="{StaticResource Label}"/>
-                                        <TextBlock Text="{Binding NoiseControlText}" FontSize="15" FontWeight="Bold"/>
-                                        <TextBlock Text="button on headset" FontSize="11" Foreground="{StaticResource Faint}"/>
-                                    </StackPanel>
-                                </Border>
-                                <Border Margin="4" Padding="10,8" CornerRadius="4" BorderBrush="{StaticResource Line}" BorderThickness="1" Background="{StaticResource Well}">
-                                    <StackPanel>
-                                        <TextBlock Text="BLUETOOTH" Style="{StaticResource Label}"/>
-                                        <TextBlock Text="{Binding BluetoothText}" FontSize="15" FontWeight="Bold"/>
-                                        <TextBlock Text="button on headset" FontSize="11" Foreground="{StaticResource Faint}"/>
-                                    </StackPanel>
-                                </Border>
-                                <Button Style="{StaticResource TileButton}" Margin="4" Command="{Binding ToggleRangeModeCommand}"
-                                        ToolTip="Speed has lower latency; Range reaches further">
-                                    <StackPanel>
-                                        <TextBlock Text="WIRELESS" Style="{StaticResource Label}"/>
-                                        <TextBlock FontSize="15" FontWeight="Bold">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="Speed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding RangeMode}" Value="True">
-                                                            <Setter Property="Text" Value="Range"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Button>
-                            </UniformGrid>
-
-                            <!-- Quick bars -->
-                            <DockPanel Margin="0,14,0,0">
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding HeadsetVolume, StringFormat={}{0} / 56}"/>
-                                <TextBlock Text="HEADSET VOLUME (DIAL)" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding HeadsetVolume, Mode=OneWay}" Maximum="56" Segments="14"
-                                        IsReadOnly="True" Focusable="False" Cursor="Arrow" Fill="#FFC9C6BF" AutomationProperties.Name="Headset volume"/>
-
-                            <DockPanel Margin="0,12,0,0">
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding MicVolume, StringFormat={}{0} / 10}"/>
-                                <TextBlock Text="MIC GAIN" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding MicVolume}" Maximum="10" Segments="10" AutomationProperties.Name="Mic gain"/>
-
-                            <DockPanel Margin="0,12,0,0">
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding SidetoneText}"/>
-                                <TextBlock Text="SIDETONE (HEAR YOURSELF)" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding Sidetone}" Maximum="3" Segments="3" AutomationProperties.Name="Sidetone"/>
-
-                            <DockPanel Margin="0,12,0,0">
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding Brightness, StringFormat={}{0} / 10}"/>
-                                <TextBlock Text="SCREEN BRIGHTNESS" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding Brightness}" Maximum="10" Segments="10" AutomationProperties.Name="Screen brightness"/>
+                <!-- Headset -->
+                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="20,16" Margin="0,0,0,16">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE76C;" VerticalAlignment="Center" Command="{Binding OpenHeadsetCommand}"
+                                ToolTip="Headset settings" AutomationProperties.Name="Headset settings"/>
+                        <Border Width="46" Height="46" CornerRadius="23" Background="{StaticResource PanelHi}" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE7F6;" FontFamily="{StaticResource IconFont}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Margin="14,0,22,0" Width="184">
+                            <TextBlock Text="Arctis Nova Pro Wireless" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="{Binding HeadsetStateText}" Style="{StaticResource Label}" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
-                    </ScrollViewer>
+                        <!-- Batteries -->
+                        <StackPanel VerticalAlignment="Center" Width="116" Margin="0,0,16,0" Visibility="{Binding HeadsetOn, Converter={StaticResource BoolToVis}}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding HeadsetBattery, StringFormat={}{0}%}" Style="{StaticResource Mono}"/>
+                                <TextBlock Text="Headset battery" Style="{StaticResource Label}" FontSize="12"/>
+                            </DockPanel>
+                            <c:LevelBar Style="{StaticResource GaugeBar}" Value="{Binding HeadsetBattery, Mode=OneWay}" Margin="0,6,0,0" AutomationProperties.Name="Headset battery"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center" Width="116" Margin="0,0,20,0" Visibility="{Binding BaseStationConnected, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="The battery charging in the base station">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding SpareBattery, StringFormat={}{0}%}" Style="{StaticResource Mono}"/>
+                                <TextBlock Text="Spare battery" Style="{StaticResource Label}" FontSize="12"/>
+                            </DockPanel>
+                            <c:LevelBar Style="{StaticResource GaugeBar}" Value="{Binding SpareBattery, Mode=OneWay}" Margin="0,6,0,0" AutomationProperties.Name="Spare battery"/>
+                        </StackPanel>
+                        <!-- State pills -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding HeadsetOn, Converter={StaticResource BoolToVis}}">
+                            <Button Command="{Binding ToggleMicMuteCommand}" Padding="12,0" MinHeight="30" Margin="0,0,8,0" ToolTip="Mute or unmute the mic for every app">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="&#xE720;"/>
+                                                <Setter Property="Foreground" Value="{StaticResource Good}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMicSilenced}" Value="True">
+                                                        <Setter Property="Text" Value="&#xF781;"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource Bad}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding MicStatusText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Border Style="{StaticResource Pill}" ToolTip="Switched with the button on the headset">
+                                <TextBlock Text="{Binding NoiseControlText}" FontSize="13"/>
+                            </Border>
+                            <Border Style="{StaticResource Pill}" ToolTip="Switched with the button on the headset">
+                                <TextBlock Text="{Binding BluetoothText}" FontSize="13"/>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
 
-                <!-- Channel strips + ChatMix -->
-                <Grid Grid.Column="2">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="14"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <Border Style="{StaticResource Card}" Padding="7,12">
-                        <Grid>
-                            <ItemsControl ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource Strip}" Focusable="False">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                            <TextBlock Text="{Binding SonarStatus}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- ChatMix -->
+                <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Padding="20,14" Margin="0,16,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,24,0" Width="220">
+                            <TextBlock Text="ChatMix" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock TextWrapping="Wrap">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Label}">
+                                        <Setter Property="Text" Value="Turn the dial on the base station"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SonarAvailable}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            <DataTrigger Binding="{Binding ChatMixEnabled}" Value="False">
+                                                <Setter Property="Text" Value="Off: Game and Chat at full volume"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                        </Grid>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Style="{StaticResource Mono}" VerticalAlignment="Center" Width="96"
+                                   Text="{Binding ChatMixGamePercent, StringFormat=Game {0}%}"/>
+                        <c:LevelBar Grid.Column="2" Orientation="Horizontal" Height="24" Minimum="-100" Maximum="100" Origin="0" Value="{Binding ChatMix, Mode=OneWay}"
+                                    IsReadOnly="True" Focusable="False" Cursor="Arrow" TrackThickness="6" ThumbSize="18" IsEnabled="{Binding ChatMixEnabled}"
+                                    ToolTip="Follows the dial on the base station" AutomationProperties.Name="ChatMix balance, game against chat"/>
+                        <TextBlock Grid.Column="3" Style="{StaticResource Mono}" VerticalAlignment="Center" Width="86" TextAlignment="Right"
+                                   Text="{Binding ChatMixChatPercent, StringFormat=Chat {0}%}"/>
+                        <CheckBox Grid.Column="4" Style="{StaticResource Switch}" IsChecked="{Binding ChatMixEnabled}" Margin="24,0,0,0" VerticalAlignment="Center"
+                                  IsEnabled="{Binding IsActive}" AutomationProperties.Name="ChatMix on"
+                                  ToolTip="On: the base station's dial balances Game against Chat, as in Sonar. Off: ChatMix is switched off on the base station and Game and Chat both play at full volume."/>
+                    </Grid>
+                </Border>
+
+                <!-- Channel strips + add channel -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <c:PlainItemsControl ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource Strip}" Focusable="False" Margin="0,0,-14,0">
+                        <c:PlainItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </c:PlainItemsControl.ItemsPanel>
+                    </c:PlainItemsControl>
+                    <Border Grid.Column="1" Width="170" Margin="14,0,0,0" CornerRadius="12" BorderBrush="{StaticResource LineHi}" BorderThickness="1" Padding="14"
+                            Visibility="{Binding CanAddChannel, Converter={StaticResource BoolToVis}}">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="20" HorizontalAlignment="Center" Foreground="{StaticResource Subtle}"/>
+                            <TextBlock Text="Add a channel" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                            <TextBlock Style="{StaticResource EffectHint}" TextAlignment="Center" Margin="0,0,0,12"
+                                       Text="Turns it on in Windows so apps can play to it."/>
+                            <c:PlainItemsControl ItemsSource="{Binding HiddenChannels}" Focusable="False">
+                                <c:PlainItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ChannelStripViewModel}">
+                                        <Button Margin="0,0,0,6" HorizontalContentAlignment="Left" AutomationProperties.Name="{Binding Name, StringFormat=Add {0}}"
+                                                Command="{Binding DataContext.AddChannelCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Width="10" Height="10" CornerRadius="5" Background="{Binding Color}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </c:PlainItemsControl.ItemTemplate>
+                            </c:PlainItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="{Binding SonarStatus}" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Hint}"
+                               Visibility="{Binding SonarAvailable, Converter={StaticResource InvertVis}}"/>
+                </Grid>
+            </DockPanel>
+        </TabItem>
+
+        <!-- ================= EQ & EFFECTS ================= -->
+        <TabItem Header="EQ &amp; effects" Tag="&#xE9E9;">
+            <Grid x:Name="soundPage" DataContext="{Binding SelectedSound}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <DockPanel>
+                    <TextBlock Text="EQ &amp; effects" Style="{StaticResource PageTitle}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                    <!-- Channel picker -->
+                    <ListBox Style="{StaticResource Options}" ItemsSource="{Binding DataContext.Sounds, RelativeSource={RelativeSource AncestorType=Window}}"
+                             SelectedItem="{Binding DataContext.SelectedSound, RelativeSource={RelativeSource AncestorType=Window}}"
+                             SelectedValuePath="" DisplayMemberPath="" VerticalAlignment="Center" AutomationProperties.Name="Channel">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ChannelSoundViewModel}">
+                                <StackPanel Orientation="Horizontal" Margin="2,4">
+                                    <Border Width="9" Height="9" CornerRadius="5" Background="{Binding Color}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="236"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Presets -->
+                    <Border Style="{StaticResource Card}" Padding="16">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Presets" Style="{StaticResource Heading}"/>
+                            <TextBox DockPanel.Dock="Top" Text="{Binding PresetFilter, UpdateSourceTrigger=PropertyChanged}" Tag="Search presets"
+                                     AutomationProperties.Name="Search presets"/>
+                            <!-- Save as -->
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                                <TextBlock Text="Save this sound as a preset" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Save" Style="{StaticResource AccentButton}" Command="{Binding SavePresetCommand}" Margin="6,0,0,0"/>
+                                    <TextBox Text="{Binding NewPresetName, UpdateSourceTrigger=PropertyChanged}" Tag="Name" AutomationProperties.Name="New preset name">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Enter" Command="{Binding SavePresetCommand}"/>
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                </DockPanel>
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Presets}" Margin="-6,10,-6,0" Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.IsVirtualizingWhenGrouping="True" AutomationProperties.Name="Presets">
+                                <ListBox.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Label}" FontSize="12" Margin="10,12,0,4"/>
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ListBox.GroupStyle>
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="b" Padding="10,7" CornerRadius="8" Background="Transparent" Margin="0,1">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="b" Property="Background" Value="{StaticResource PanelHi}"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                                            <Setter TargetName="b" Property="Background" Value="{StaticResource PanelHi}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:PresetItem}">
+                                        <DockPanel Background="Transparent">
+                                            <DockPanel.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.ApplyPresetCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                            </DockPanel.InputBindings>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Width="24" MinHeight="22" Height="22"
+                                                    Visibility="{Binding IsYours, Converter={StaticResource BoolToVis}}" ToolTip="Delete this preset"
+                                                    Command="{Binding DataContext.DeletePresetCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                            <TextBlock x:Name="check" DockPanel.Dock="Left" Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                                       Foreground="{StaticResource Accent}" Width="20" VerticalAlignment="Center" Visibility="Hidden"/>
+                                            <TextBlock x:Name="n" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Value="True">
+                                                <DataTrigger.Binding>
+                                                    <MultiBinding Converter="{StaticResource NameMatches}">
+                                                        <Binding Path="Name"/>
+                                                        <Binding Path="DataContext.PresetName" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
+                                                    </MultiBinding>
+                                                </DataTrigger.Binding>
+                                                <Setter TargetName="n" Property="Foreground" Value="{StaticResource Accent}"/>
+                                                <Setter TargetName="n" Property="FontWeight" Value="SemiBold"/>
+                                                <Setter TargetName="check" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Card}" Padding="16,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                                <TextBlock Text="CHATMIX" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
-                                <TextBlock Text="base station dial" Style="{StaticResource Label}"/>
+                    <!-- Equalizer -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right" Content="Flatten" Command="{Binding FlattenBandsCommand}" Margin="8,0,0,0"
+                                        ToolTip="Set every band and boost to 0 dB"/>
+                                <Button DockPanel.Dock="Right" Content="Reset to Flat" Command="{Binding ResetFlatCommand}" Margin="8,0,0,0"
+                                        ToolTip="Sonar's Flat preset: flat EQ and every effect off"/>
+                                <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding EqEnabled}" HorizontalAlignment="Left" FontSize="16">
+                                    <TextBlock Text="Equalizer" FontWeight="SemiBold"/>
+                                </CheckBox>
+                            </DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" FontSize="12" Margin="0,0,0,10"
+                                       Text="Drag a point to move it. Scroll over a point to make it wider or narrower. Double-click a point to flatten it. Changes are heard straight away."/>
+
+                            <!-- Boosts (playback channels) -->
+                            <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0" Visibility="{Binding IsPlayback, Converter={StaticResource BoolToVis}}"
+                                  IsEnabled="{Binding EqEnabled}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding BassBoost, Converter={StaticResource Num}, ConverterParameter=+0.0 dB;−0.0 dB;0 dB}"/>
+                                        <TextBlock Text="Bass" Style="{StaticResource Label}"/>
+                                    </DockPanel>
+                                    <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding BassBoost}" Minimum="-12" Maximum="12" Origin="0" ResetValue="0"
+                                                SmallChange="0.5" Fill="{Binding Color}" AutomationProperties.Name="Bass boost"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding VoiceBoost, Converter={StaticResource Num}, ConverterParameter=+0.0 dB;−0.0 dB;0 dB}"/>
+                                        <TextBlock Text="Voice" Style="{StaticResource Label}"/>
+                                    </DockPanel>
+                                    <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding VoiceBoost}" Minimum="-12" Maximum="12" Origin="0" ResetValue="0"
+                                                SmallChange="0.5" Fill="{Binding Color}" AutomationProperties.Name="Voice boost"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding TrebleBoost, Converter={StaticResource Num}, ConverterParameter=+0.0 dB;−0.0 dB;0 dB}"/>
+                                        <TextBlock Text="Treble" Style="{StaticResource Label}"/>
+                                    </DockPanel>
+                                    <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding TrebleBoost}" Minimum="-12" Maximum="12" Origin="0" ResetValue="0"
+                                                SmallChange="0.5" Fill="{Binding Color}" AutomationProperties.Name="Treble boost"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Selected band -->
+                            <Border DockPanel.Dock="Bottom" Background="{StaticResource PanelHi}" CornerRadius="10" Padding="14" Margin="0,12,0,0"
+                                    DataContext="{Binding SelectedBand}" IsEnabled="{Binding DataContext.EqEnabled, ElementName=soundPage}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" Content="On" FontWeight="Normal" IsChecked="{Binding Enabled}"
+                                                  AutomationProperties.Name="Band on"/>
+                                        <TextBlock Text="{Binding Number, StringFormat=Band {0}}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <StackPanel IsEnabled="{Binding Enabled}">
+                                        <ListBox Style="{StaticResource Options}" Margin="0,10,0,0" ItemsSource="{x:Static vm:ChannelSoundViewModel.FilterTypeOptions}" SelectedValue="{Binding Type}"
+                                                 AutomationProperties.Name="Filter type"/>
+                                        <Grid Margin="0,12,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition/>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition/>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding FrequencyText}"/>
+                                                    <TextBlock Text="Frequency" Style="{StaticResource Label}"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding FrequencyPosition}" Maximum="1000" SmallChange="10"
+                                                            AutomationProperties.Name="Band frequency"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" IsEnabled="{Binding HasGain}">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding GainText}"/>
+                                                    <TextBlock Text="Gain" Style="{StaticResource Label}"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding Gain}" Minimum="-12" Maximum="12" Origin="0" ResetValue="0"
+                                                            SmallChange="0.5" AutomationProperties.Name="Band gain"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="4">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding QText}"/>
+                                                    <TextBlock Text="Width (Q)" Style="{StaticResource Label}"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding QPosition}" Maximum="1000" SmallChange="20"
+                                                            ResetValue="{x:Static vm:EqBandEditViewModel.DefaultQPosition}" AutomationProperties.Name="Band width"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Band buttons -->
+                            <ListBox DockPanel.Dock="Bottom" Style="{StaticResource Options}" ItemsSource="{Binding Bands}" SelectedItem="{Binding SelectedBand}"
+                                     SelectedValuePath="" DisplayMemberPath="" Margin="0,12,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="Band">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:EqBandEditViewModel}">
+                                        <TextBlock x:Name="t" Text="{Binding Number}" MinWidth="16" TextAlignment="Center" Typography.NumeralAlignment="Tabular"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"/>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                                <Setter TargetName="t" Property="Opacity" Value="0.45"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <Border Background="{StaticResource Well}" CornerRadius="10" MinHeight="200">
+                                <c:EqGraph Bands="{Binding Bands}" SelectedBand="{Binding SelectedBand, Mode=TwoWay}" ExtraFilters="{Binding BoostFilters}"
+                                           IsActive="{Binding EqEnabled}" Accent="{Binding Color}" Margin="6"
+                                           IsEnabled="{Binding EqEnabled}" AutomationProperties.Name="EQ curve"/>
+                            </Border>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Effects -->
+                    <Border Grid.Column="4" Style="{StaticResource Card}" Padding="0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="16">
+                                <TextBlock Text="Effects" Style="{StaticResource Heading}"/>
+
+                                <!-- Playback: spatial audio, volume boost, smart volume -->
+                                <StackPanel Visibility="{Binding IsPlayback, Converter={StaticResource BoolToVis}}">
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Spatial audio" IsChecked="{Binding SpatialOn}"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Makes sound come from around you instead of inside your head."/>
+                                            <StackPanel IsEnabled="{Binding SpatialOn}">
+                                                <ListBox Style="{StaticResource Options}" Margin="0,10,0,0" ItemsSource="{x:Static vm:ChannelSoundViewModel.SpatialModeOptions}"
+                                                         SelectedValue="{Binding SpatialMode}" AutomationProperties.Name="Spatial audio mode"/>
+                                                <DockPanel Margin="0,10,0,0">
+                                                    <TextBlock DockPanel.Dock="Right" Text="Immersion" Style="{StaticResource Label}" FontSize="12"/>
+                                                    <TextBlock Text="Performance" Style="{StaticResource Label}" FontSize="12"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding SpatialTuning}" Minimum="-12" Maximum="0" SmallChange="0.5" ResetValue="-6"
+                                                            AutomationProperties.Name="Spatial tuning, performance to immersion"/>
+                                                <DockPanel Margin="0,10,0,0">
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding SpatialDistance, StringFormat={}{0:0}%}"/>
+                                                    <TextBlock Text="Distance" Style="{StaticResource Label}" FontSize="12"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding SpatialDistance}" Maximum="100" SmallChange="5" ResetValue="100"
+                                                            AutomationProperties.Name="Speaker distance"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" VerticalAlignment="Center"
+                                                           Text="{Binding VolumeBoost, Converter={StaticResource Num}, ConverterParameter=+0.0 dB;−0.0 dB;Off}"/>
+                                                <TextBlock Text="Volume boost" FontWeight="SemiBold"/>
+                                            </DockPanel>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Raises the level before the other effects, for quiet games."/>
+                                            <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding VolumeBoost}" Maximum="12" SmallChange="0.5" ResetValue="0"
+                                                        AutomationProperties.Name="Volume boost"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Smart volume" IsChecked="{Binding SmartVolumeOn}"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Keeps the volume in a range, so it never gets too loud or too quiet."/>
+                                            <StackPanel IsEnabled="{Binding SmartVolumeOn}">
+                                                <ListBox Style="{StaticResource Options}" Margin="0,10,0,0" ItemsSource="{x:Static vm:ChannelSoundViewModel.LoudnessOptions}"
+                                                         SelectedValue="{Binding Loudness}" AutomationProperties.Name="Smart volume loudness"/>
+                                                <DockPanel Margin="0,8,0,0">
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding SmartVolumeLevel, StringFormat={}{0:0}%}"/>
+                                                    <TextBlock Text="Strength" Style="{StaticResource Label}" FontSize="12"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding SmartVolumeLevel}" Maximum="100" SmallChange="5"
+                                                            AutomationProperties.Name="Smart volume strength"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Voice: ClearCast, echo, noise reduction, gate, compressor -->
+                                <StackPanel Visibility="{Binding IsVoice, Converter={StaticResource BoolToVis}}">
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <CheckBox Style="{StaticResource Switch}" Content="ClearCast AI noise cancelling" IsChecked="{Binding NoiseCancelOn}"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Removes everything that isn't a voice, including echo and room sound."/>
+                                            <StackPanel IsEnabled="{Binding NoiseCancelOn}">
+                                                <DockPanel Margin="0,10,0,0">
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding NoiseCancelStrength, StringFormat={}{0:0}%}"/>
+                                                    <TextBlock Text="Strength" Style="{StaticResource Label}" FontSize="12"/>
+                                                </DockPanel>
+                                                <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding NoiseCancelStrength}" Maximum="100" SmallChange="5" ResetValue="90"
+                                                            AutomationProperties.Name="Noise cancelling strength"/>
+                                                <CheckBox Style="{StaticResource Switch}" Content="Echo cancelling" IsChecked="{Binding EchoCancelOn}" FontWeight="Normal" Margin="0,10,0,0"
+                                                          Visibility="{Binding IsMic, Converter={StaticResource BoolToVis}}"
+                                                          ToolTip="Stops what you hear (game, chat) from being picked up by your mic, e.g. when using speakers"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource EffectBox}" IsEnabled="{Binding ClassicNoiseReductionAvailable}">
+                                        <StackPanel>
+                                            <TextBlock Text="Noise reduction" FontWeight="SemiBold"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Background takes out steady noise like fans; impact takes out clicks and keystrokes. Off while ClearCast is on."/>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Background" IsChecked="{Binding NoiseReductionOn}" FontWeight="Normal" Margin="0,8,0,0"/>
+                                            <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding NoiseReductionLevel}" Maximum="100" SmallChange="5" IsEnabled="{Binding NoiseReductionOn}"
+                                                        AutomationProperties.Name="Background noise reduction"/>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Impact" IsChecked="{Binding ImpactReductionOn}" FontWeight="Normal" Margin="0,10,0,0"/>
+                                            <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding ImpactReductionLevel}" Maximum="100" SmallChange="5" IsEnabled="{Binding ImpactReductionOn}"
+                                                        AutomationProperties.Name="Impact noise reduction"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Noise gate" IsChecked="{Binding NoiseGateOn}"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Cuts the sound completely while it's quieter than the threshold."/>
+                                            <StackPanel IsEnabled="{Binding NoiseGateOn}">
+                                                <CheckBox Style="{StaticResource Switch}" Content="Set the threshold automatically" IsChecked="{Binding NoiseGateAuto}" FontWeight="Normal" Margin="0,8,0,0"/>
+                                                <StackPanel IsEnabled="{Binding NoiseGateManual}">
+                                                    <DockPanel Margin="0,6,0,0">
+                                                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding NoiseGateThreshold, StringFormat={}{0:0} dB}"/>
+                                                        <TextBlock Text="Threshold" Style="{StaticResource Label}" FontSize="12"/>
+                                                    </DockPanel>
+                                                    <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding NoiseGateThreshold}" Minimum="-60" Maximum="-10" SmallChange="1"
+                                                                AutomationProperties.Name="Noise gate threshold"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource EffectBox}">
+                                        <StackPanel>
+                                            <CheckBox Style="{StaticResource Switch}" Content="Compressor" IsChecked="{Binding CompressorOn}"/>
+                                            <TextBlock Style="{StaticResource EffectHint}" Text="Evens out loud and quiet speech."/>
+                                            <DockPanel Margin="0,8,0,0" IsEnabled="{Binding CompressorOn}">
+                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding CompressorLevel, StringFormat={}{0:0}%}"/>
+                                                <TextBlock Text="Strength" Style="{StaticResource Label}" FontSize="12"/>
+                                            </DockPanel>
+                                            <c:LevelBar Style="{StaticResource ValueBar}" Value="{Binding CompressorLevel}" Maximum="100" SmallChange="5" IsEnabled="{Binding CompressorOn}"
+                                                        AutomationProperties.Name="Compressor strength"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
                             </StackPanel>
-                            <TextBlock Grid.Column="1" Style="{StaticResource Mono}" FontSize="13" VerticalAlignment="Center" Width="96"
-                                       Text="{Binding ChatMixGamePercent, StringFormat=GAME {0}%}"/>
-                            <c:LevelBar Grid.Column="2" Orientation="Horizontal" Height="28" Minimum="-100" Maximum="100" Origin="0" ResetValue="0"
-                                        SmallChange="5" Value="{Binding ChatMix}" Cap="{StaticResource Text}" IsEnabled="{Binding ChatMixEnabled}"
-                                        AutomationProperties.Name="ChatMix balance, game against chat"/>
-                            <TextBlock Grid.Column="3" Style="{StaticResource Mono}" FontSize="13" VerticalAlignment="Center" Width="86" TextAlignment="Right"
-                                       Text="{Binding ChatMixChatPercent, StringFormat=CHAT {0}%}"/>
-                            <CheckBox Grid.Column="4" Content="On" IsChecked="{Binding ChatMixEnabled}" Margin="18,0,0,0" VerticalAlignment="Center"
-                                      ToolTip="Balance Game against Chat with the base station dial"/>
-                        </Grid>
+                        </ScrollViewer>
                     </Border>
                 </Grid>
+
+                <TextBlock Grid.RowSpan="3" Text="EQ and effects need the Sonar audio engine, which comes with SteelSeries GG."
+                           Style="{StaticResource Hint}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding DataContext.SonarAvailable, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource InvertVis}}"/>
             </Grid>
         </TabItem>
 
         <!-- ================= DEVICES ================= -->
-        <TabItem Header="DEVICES">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="14"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="14"/>
-                    <ColumnDefinition Width="300"/>
-                </Grid.ColumnDefinitions>
+        <TabItem Header="Devices" Tag="&#xE7F5;">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Devices" Style="{StaticResource PageTitle}" Margin="0,0,0,16"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource Card}">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="OUTPUT PRIORITY" Style="{StaticResource Heading}"/>
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,12"
-                                   Text="Every channel plays on the first ticked device that's available. The headset only counts while it's switched on. Blocked devices are kept disabled so nothing can grab them."/>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding OutputDevices}" ItemTemplate="{StaticResource DeviceRow}" Focusable="False"/>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-
-                <Border Grid.Column="2" Style="{StaticResource Card}">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="MICROPHONE PRIORITY" Style="{StaticResource Heading}"/>
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,12"
-                                   Text="The first ticked mic that's available feeds the virtual mic that Discord and games record."/>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding InputDevices}" ItemTemplate="{StaticResource DeviceRow}" Focusable="False"/>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-
-                <StackPanel Grid.Column="4">
                     <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="MIXER CHANNELS" Style="{StaticResource Heading}"/>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8" Text="Choose which channel strips the mixer shows."/>
-                            <ItemsControl ItemsSource="{Binding ChannelToggles}" Focusable="False">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:ChannelToggleViewModel}">
-                                        <CheckBox IsChecked="{Binding IsShown}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="10" Height="10" CornerRadius="2" Background="{Binding Color}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding Name}"/>
-                                            </StackPanel>
-                                        </CheckBox>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Speakers and headphones" Style="{StaticResource Heading}" Margin="0,0,0,4"/>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,14"
+                                       Text="Channels on Automatic play on the first ticked device that's available. The headset only counts while it's switched on. Blocked devices are kept off so nothing can grab them."/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <c:PlainItemsControl ItemsSource="{Binding OutputDevices}" ItemTemplate="{StaticResource DeviceRow}" Focusable="False"/>
+                            </ScrollViewer>
+                        </DockPanel>
                     </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+
+                    <DockPanel Grid.Column="2">
+                    <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,16,0,0">
                         <StackPanel>
-                            <TextBlock Text="WINDOWS DEFAULTS" Style="{StaticResource Heading}"/>
-                            <CheckBox Content="Keep them on AudioMixer" IsChecked="{Binding ManageWindowsDefaults}"/>
-                            <Grid Margin="0,8,0,0">
+                            <TextBlock Text="Windows defaults" Style="{StaticResource Heading}"/>
+                            <CheckBox Style="{StaticResource Switch}" Content="Keep them on AudioMixer" FontWeight="Normal" IsChecked="{Binding ManageWindowsDefaults}"/>
+                            <Grid Margin="0,12,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -475,213 +821,269 @@
                                     <RowDefinition/>
                                     <RowDefinition/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="Playback" Foreground="{StaticResource Subtle}" Margin="0,3"/>
-                                <TextBlock Grid.Column="1" Text="Game" Margin="0,3"/>
-                                <TextBlock Grid.Row="1" Text="Communications" Foreground="{StaticResource Subtle}" Margin="0,3"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Chat" Margin="0,3"/>
-                                <TextBlock Grid.Row="2" Text="Recording" Foreground="{StaticResource Subtle}" Margin="0,3"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Virtual mic" Margin="0,3"/>
+                                <TextBlock Text="Playback" Style="{StaticResource Label}" Margin="0,4"/>
+                                <TextBlock Grid.Column="1" Text="Game" Margin="0,4"/>
+                                <TextBlock Grid.Row="1" Text="Communications" Style="{StaticResource Label}" Margin="0,4"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="Chat" Margin="0,4"/>
+                                <TextBlock Grid.Row="2" Text="Recording" Style="{StaticResource Label}" Margin="0,4"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Virtual mic" Margin="0,4"/>
                             </Grid>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" FontSize="12"
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0" FontSize="12"
                                        Text="Put back automatically if something, such as a newly plugged-in controller, takes over."/>
                         </StackPanel>
                     </Border>
-                </StackPanel>
-            </Grid>
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Microphones" Style="{StaticResource Heading}" Margin="0,0,0,4"/>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,14"
+                                       Text="The first ticked mic that's available feeds the virtual mic that Discord and games record."/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <c:PlainItemsControl ItemsSource="{Binding InputDevices}" ItemTemplate="{StaticResource DeviceRow}" Focusable="False"/>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    </DockPanel>
+                </Grid>
+            </DockPanel>
         </TabItem>
 
         <!-- ================= HEADSET ================= -->
-        <TabItem Header="HEADSET">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <Grid IsEnabled="{Binding BaseStationConnected}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="300"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+        <TabItem Header="Headset" Tag="&#xE7F6;">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Headset" Style="{StaticResource PageTitle}" Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,16"
+                           Text="These settings live on the base station. Each change is checked and saved there, so it stays even without AudioMixer."/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,-12,0" Padding="0,0,12,0">
+                    <Grid IsEnabled="{Binding BaseStationConnected}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="320"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                    <!-- Status + Bluetooth & power -->
-                    <StackPanel>
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Text="STATUS" Style="{StaticResource Heading}"/>
-                                <ItemsControl ItemsSource="{Binding StatusRows}" Focusable="False">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type vm:StatusRow}">
-                                            <Border BorderBrush="#FF25272C" BorderThickness="0,0,0,1" Padding="0,6">
-                                                <DockPanel>
-                                                    <TextBlock x:Name="v" DockPanel.Dock="Right" Text="{Binding Value}" Style="{StaticResource Mono}"/>
-                                                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource Subtle}" FontSize="13"/>
-                                                </DockPanel>
-                                            </Border>
-                                            <DataTemplate.Triggers>
-                                                <DataTrigger Binding="{Binding Good}" Value="True">
-                                                    <Setter TargetName="v" Property="Foreground" Value="{StaticResource Good}"/>
-                                                </DataTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,10,0,0"
-                                           Text="Noise mode, mic mute and Bluetooth power are switched with the headset's own buttons; the base station only reports them."/>
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource Card}" Margin="0,14,0,0">
-                            <StackPanel>
-                                <TextBlock Text="BLUETOOTH &amp; POWER" Style="{StaticResource Heading}"/>
-                                <CheckBox Content="Bluetooth on when the headset powers up" IsChecked="{Binding BluetoothOnAtStartup}"/>
-                                <TextBlock Text="During a Bluetooth call" Style="{StaticResource Label}" Margin="0,10,0,6"/>
-                                <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.CallModeOptions}" SelectedValue="{Binding CallMode}"/>
-                                <TextBlock Text="Headset sleeps after" Style="{StaticResource Label}" Margin="0,8,0,6"/>
-                                <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TimerOptions}" SelectedValue="{Binding SleepAfterMinutes}"/>
-                                <TextBlock Text="2.4 GHz link" Style="{StaticResource Label}" Margin="0,8,0,6"/>
-                                <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.WirelessOptions}" SelectedValue="{Binding RangeMode}"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2">
-                    <!-- Base station EQ -->
-                    <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Zero bands" Command="{Binding ResetEqCommand}" Margin="8,0,0,4" VerticalAlignment="Top"
-                                        ToolTip="Set every band to 0 dB (Custom preset)"/>
-                                <ListBox DockPanel.Dock="Right" Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.EqPresetOptions}" SelectedValue="{Binding EqPreset}"/>
+                            <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="BASE STATION EQ" Style="{StaticResource Heading}" Margin="0"/>
-                                    <TextBlock Text="Runs on the base station, so it also applies to Bluetooth. Double-click a band to zero it." Style="{StaticResource Label}"/>
+                                    <TextBlock Text="Status" Style="{StaticResource Heading}"/>
+                                    <c:PlainItemsControl ItemsSource="{Binding StatusRows}" Focusable="False">
+                                        <c:PlainItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:StatusRow}">
+                                                <DockPanel Margin="0,5">
+                                                    <TextBlock x:Name="v" DockPanel.Dock="Right" Text="{Binding Value}" Style="{StaticResource Mono}" FontWeight="Normal"/>
+                                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Label}"/>
+                                                </DockPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Good}" Value="True">
+                                                        <Setter TargetName="v" Property="Foreground" Value="{StaticResource Good}"/>
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </c:PlainItemsControl.ItemTemplate>
+                                    </c:PlainItemsControl>
+                                    <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,10,0,0"
+                                               Text="Noise control, mic mute and Bluetooth power are switched with the headset's own buttons; the base station only reports them."/>
                                 </StackPanel>
-                            </DockPanel>
-                            <Grid Height="220" Margin="0,14,0,0">
+                            </Border>
+                            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Bluetooth &amp; power" Style="{StaticResource Heading}"/>
+                                    <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="Bluetooth on when the headset starts" IsChecked="{Binding BluetoothOnAtStartup}"/>
+                                    <TextBlock Text="During a Bluetooth call" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                    <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.CallModeOptions}" SelectedValue="{Binding CallMode}"/>
+                                    <TextBlock Text="Headset sleeps after" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                    <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TimerOptions}" SelectedValue="{Binding SleepAfterMinutes}"/>
+                                    <TextBlock Text="Wireless" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                    <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.WirelessOptions}" SelectedValue="{Binding RangeMode}"/>
+                                    <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0" Text="Speed has lower delay; Range reaches further."/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <!-- Base station EQ -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Flatten" Command="{Binding ResetEqCommand}" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                ToolTip="Set every band to 0 dB (Custom preset)"/>
+                                        <StackPanel>
+                                            <TextBlock Text="Base station EQ" Style="{StaticResource Heading}" Margin="0"/>
+                                            <TextBlock Text="Runs on the base station, so it also applies to Bluetooth and consoles. Double-click a band to zero it." Style="{StaticResource Hint}" FontSize="12"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <ListBox Style="{StaticResource Options}" Margin="0,12,0,0" ItemsSource="{x:Static vm:MainViewModel.EqPresetOptions}" SelectedValue="{Binding EqPreset}"/>
+                                    <Grid Height="210" Margin="0,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Margin="0,24,10,34">
+                                            <TextBlock Text="+10" Style="{StaticResource Label}" FontSize="11" VerticalAlignment="Top"/>
+                                            <TextBlock Text="0" Style="{StaticResource Label}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="−10" Style="{StaticResource Label}" FontSize="11" VerticalAlignment="Bottom"/>
+                                        </Grid>
+                                        <c:PlainItemsControl Grid.Column="1" ItemsSource="{Binding EqBands}" Focusable="False">
+                                            <c:PlainItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                                            </c:PlainItemsControl.ItemsPanel>
+                                            <c:PlainItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
+                                                    <DockPanel Margin="2,0">
+                                                        <TextBlock DockPanel.Dock="Top" Text="{Binding GainText}" Style="{StaticResource Mono}" FontWeight="Normal" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Label}" Style="{StaticResource Label}" FontSize="12"
+                                                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                                        <c:LevelBar Value="{Binding Gain}" Minimum="-10" Maximum="10" Origin="0" Step="0.5" SmallChange="0.5" ResetValue="0"
+                                                                    TrackThickness="4" ThumbSize="16" Width="24" AutomationProperties.Name="{Binding Label, StringFormat=EQ band {0} Hz}"/>
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </c:PlainItemsControl.ItemTemplate>
+                                        </c:PlainItemsControl>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Grid Margin="0,16,0,0">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <Grid Margin="0,22,8,40">
-                                    <TextBlock Text="+10" Style="{StaticResource Mono}" FontSize="10" Foreground="{StaticResource Faint}" VerticalAlignment="Top"/>
-                                    <TextBlock Text="0" Style="{StaticResource Mono}" FontSize="10" Foreground="{StaticResource Faint}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    <TextBlock Text="−10" Style="{StaticResource Mono}" FontSize="10" Foreground="{StaticResource Faint}" VerticalAlignment="Bottom"/>
-                                </Grid>
-                                <ItemsControl Grid.Column="1" ItemsSource="{Binding EqBands}" Focusable="False">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
-                                            <DockPanel Margin="3,0">
-                                                <TextBlock DockPanel.Dock="Top" Text="{Binding GainText}" Style="{StaticResource Mono}" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                                <TextBlock DockPanel.Dock="Bottom" Text="{Binding Label}" Style="{StaticResource Mono}" Foreground="{StaticResource Subtle}"
-                                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                                <Grid>
-                                                    <c:LevelBar Value="{Binding Gain}" Minimum="-10" Maximum="10" Origin="0" Step="0.5" SmallChange="0.5" ResetValue="0"
-                                                                MaxWidth="56" AutomationProperties.Name="{Binding Label, StringFormat=EQ band {0} Hz}"/>
-                                                    <Border Height="1" Background="{StaticResource LineHi}" MaxWidth="56" IsHitTestVisible="False"/>
-                                                </Grid>
+                                <!-- Mic & monitoring -->
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Text="Mic &amp; monitoring" Style="{StaticResource Heading}"/>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding MicVolume, StringFormat={}{0} / 10}"/>
+                                            <TextBlock Text="Mic volume" Style="{StaticResource Label}"/>
+                                        </DockPanel>
+                                        <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding MicVolume}" Maximum="10" AutomationProperties.Name="Mic volume"/>
+                                        <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="High mic gain" IsChecked="{Binding HighGain}" Margin="0,14,0,0"/>
+                                        <TextBlock Text="Sidetone (hear your own voice)" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.SidetoneOptions}" SelectedValue="{Binding Sidetone}"/>
+                                        <TextBlock Text="Line out on the base station" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.LineOutOptions}" SelectedValue="{Binding LineOut}"/>
+                                        <StackPanel Visibility="{Binding IsStreamMix, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12" Text="What the line out sends to a stream PC or recorder:"/>
+                                            <DockPanel Margin="0,8,0,0">
+                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding StreamMain, StringFormat={}{0}%}"/>
+                                                <TextBlock Text="Main audio" Style="{StaticResource Label}"/>
                                             </DockPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding StreamMain}" Maximum="100" Step="5" SmallChange="5" AutomationProperties.Name="Stream mix main"/>
+                                            <DockPanel Margin="0,8,0,0">
+                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding StreamAux, StringFormat={}{0}%}"/>
+                                                <TextBlock Text="Aux" Style="{StaticResource Label}"/>
+                                            </DockPanel>
+                                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding StreamAux}" Maximum="100" Step="5" SmallChange="5" AutomationProperties.Name="Stream mix aux"/>
+                                            <DockPanel Margin="0,8,0,0">
+                                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding StreamMic, StringFormat={}{0}%}"/>
+                                                <TextBlock Text="Mic" Style="{StaticResource Label}"/>
+                                            </DockPanel>
+                                            <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding StreamMic}" Maximum="100" Step="5" SmallChange="5" AutomationProperties.Name="Stream mix mic"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Screen & lights -->
+                                <Border Grid.Column="2" Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Text="Screen &amp; lights" Style="{StaticResource Heading}"/>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding Brightness, StringFormat={}{0} / 10}"/>
+                                            <TextBlock Text="Screen brightness" Style="{StaticResource Label}"/>
+                                        </DockPanel>
+                                        <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding Brightness}" Minimum="1" Maximum="10" AutomationProperties.Name="Screen brightness"/>
+                                        <DockPanel Margin="0,14,0,0">
+                                            <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding MutedMicBrightness, StringFormat={}{0} / 10}"/>
+                                            <TextBlock Text="Mic-muted light on the headset" Style="{StaticResource Label}"/>
+                                        </DockPanel>
+                                        <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding MutedMicBrightness}" Minimum="1" Maximum="10" AutomationProperties.Name="Mic muted light brightness"/>
+                                        <TextBlock Text="Dim the screen after" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TimerOptions}" SelectedValue="{Binding DimAfterMinutes}"/>
+                                        <TextBlock Text="Home screen" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.HomeScreenOptions}" SelectedValue="{Binding SimpleHomeScreen}"/>
+                                        <TextBlock Text="The screen shows" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ScreenOptions}" SelectedValue="{Binding ScreenMode}"
+                                                 AutomationProperties.Name="What the base station screen shows"/>
+                                        <StackPanel Visibility="{Binding IsCustomScreen, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="Open folder" Command="{Binding OpenScreensFolderCommand}" Margin="8,0,0,0"
+                                                        ToolTip="Put PNG, JPG, BMP or animated GIF files here; they're fitted to 128×64 in black and white"/>
+                                                <ComboBox ItemsSource="{Binding ScreenImages}" SelectedItem="{Binding SelectedScreenImage}" AutomationProperties.Name="Picture"/>
+                                            </DockPanel>
+                                            <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0"
+                                                       Text="Pictures and animated GIFs from your Screens folder. Bright parts light up; 128×64 black-and-white art looks best."/>
+                                        </StackPanel>
+                                        <Border Background="Black" CornerRadius="8" Padding="10" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                                ToolTip="What the base station's screen shows">
+                                            <Image Source="{Binding OledPreview}" Width="256" Height="128" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                                   AutomationProperties.Name="Preview of the base station screen"/>
+                                        </Border>
+                                        <TextBlock Text="Turn the screen off when I'm away for" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ScreenSleepOptions}" SelectedValue="{Binding ScreenSleepMinutes}"
+                                                 AutomationProperties.Name="Screen sleep"/>
+                                        <TextBlock Text="{Binding ScreenSleepText}" Style="{StaticResource Hint}" FontSize="12" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
+                                        <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,8,0,0"
+                                                   Text="Away means no keyboard, mouse or dial use on this PC. The widget, pictures, Off and sleep only work while AudioMixer is running. Turning the volume dial briefly shows the base station's own screen. The base station can't go below brightness 1, so Off draws a blank screen instead."/>
+                                    </StackPanel>
+                                </Border>
                             </Grid>
                         </StackPanel>
-                    </Border>
-
-                    <Grid Margin="0,14,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <!-- Mic & monitoring -->
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="MIC &amp; MONITORING" Style="{StaticResource Heading}"/>
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding MicVolume, StringFormat={}{0} / 10}"/>
-                                <TextBlock Text="MIC VOLUME" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Height="22" Value="{Binding MicVolume}" Maximum="10" Segments="10" AutomationProperties.Name="Mic volume"/>
-                            <CheckBox Content="High mic gain" IsChecked="{Binding HighGain}" Margin="0,12,0,0"/>
-                            <TextBlock Text="Sidetone (hear yourself)" Style="{StaticResource Label}" Margin="0,10,0,6"/>
-                            <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.SidetoneOptions}" SelectedValue="{Binding Sidetone}"/>
-                            <TextBlock Text="Line out on the base station" Style="{StaticResource Label}" Margin="0,8,0,6"/>
-                            <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.LineOutOptions}" SelectedValue="{Binding LineOut}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Screen & lights -->
-                    <Border Grid.Column="2" Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="SCREEN &amp; LIGHTS" Style="{StaticResource Heading}"/>
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding Brightness, StringFormat={}{0} / 10}"/>
-                                <TextBlock Text="SCREEN BRIGHTNESS" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Height="22" Value="{Binding Brightness}" Maximum="10" Segments="10" AutomationProperties.Name="Screen brightness"/>
-                            <DockPanel Margin="0,12,0,0">
-                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding MutedMicBrightness, StringFormat={}{0} / 10}"/>
-                                <TextBlock Text="MIC-MUTED LIGHT" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Height="22" Value="{Binding MutedMicBrightness}" Maximum="10" Segments="10" AutomationProperties.Name="Mic muted light brightness"/>
-                            <TextBlock Text="Dim the screen after" Style="{StaticResource Label}" Margin="0,12,0,6"/>
-                            <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TimerOptions}" SelectedValue="{Binding DimAfterMinutes}"/>
-                            <TextBlock Text="Home screen" Style="{StaticResource Label}" Margin="0,8,0,6"/>
-                            <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.HomeScreenOptions}" SelectedValue="{Binding SimpleHomeScreen}"/>
-                        </StackPanel>
-                    </Border>
                     </Grid>
-                    </StackPanel>
-                </Grid>
-            </ScrollViewer>
+                </ScrollViewer>
+            </DockPanel>
         </TabItem>
 
         <!-- ================= SETTINGS ================= -->
-        <TabItem Header="SETTINGS">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel MaxWidth="760" HorizontalAlignment="Left">
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="GENERAL" Style="{StaticResource Heading}"/>
-                            <CheckBox Content="Start with Windows (in the tray)" IsChecked="{Binding StartWithWindows}"/>
-                            <DockPanel Margin="0,14,0,0">
-                                <TextBlock DockPanel.Dock="Right">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
-                                            <Setter Property="Text" Value="{Binding LowBatteryWarning, StringFormat={}{0}%}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding LowBatteryWarning}" Value="0">
-                                                    <Setter Property="Text" Value="OFF"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
+        <TabItem Header="Settings" Tag="&#xE713;">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Settings" Style="{StaticResource PageTitle}" Margin="0,0,0,16"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="General" Style="{StaticResource Heading}"/>
+                                <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="Start with Windows (in the tray)" IsChecked="{Binding StartWithWindows}"/>
+                                <DockPanel Margin="0,16,0,0">
+                                    <TextBlock DockPanel.Dock="Right">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+                                                <Setter Property="Text" Value="{Binding LowBatteryWarning, StringFormat={}{0}%}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding LowBatteryWarning}" Value="0">
+                                                        <Setter Property="Text" Value="Off"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="Warn me when the headset battery drops to" Style="{StaticResource Label}"/>
+                                </DockPanel>
+                                <c:LevelBar Style="{StaticResource StepBar}" Value="{Binding LowBatteryWarning}" Maximum="50" Step="5" SmallChange="5"
+                                            AutomationProperties.Name="Low battery warning"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                            <StackPanel>
+                                <TextBlock Text="SteelSeries GG" Style="{StaticResource Heading}"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,14"
+                                           Text="AudioMixer uses the Sonar audio driver and engine that GG installed, and replaces the GG and Sonar apps. Keep GG installed so the driver stays; it just doesn't need to run. Use GG for firmware updates."/>
+                                <Button Content="Let GG start with Windows again" Command="{Binding RestoreGGCommand}" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                            <StackPanel>
+                                <TextBlock Text="About" Style="{StaticResource Heading}"/>
+                                <TextBlock Style="{StaticResource Hint}">
+                                    <Run Text="AudioMixer is open source and not affiliated with SteelSeries."/>
+                                    <LineBreak/>
+                                    <Hyperlink NavigateUri="https://github.com/Marleybop/AudioMixer" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">github.com/Marleybop/AudioMixer</Hyperlink>
                                 </TextBlock>
-                                <TextBlock Text="WARN WHEN THE HEADSET BATTERY DROPS TO" Style="{StaticResource Label}"/>
-                            </DockPanel>
-                            <c:LevelBar Style="{StaticResource StepBar}" Height="22" Value="{Binding LowBatteryWarning}" Maximum="50" Step="5" SmallChange="5" Segments="10"
-                                        AutomationProperties.Name="Low battery warning"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,14,0,0">
-                        <StackPanel>
-                            <TextBlock Text="STEELSERIES GG" Style="{StaticResource Heading}"/>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,12"
-                                       Text="AudioMixer uses the Sonar audio driver and engine that GG installed, and replaces the GG and Sonar apps. Keep GG installed so the driver stays; it just doesn't need to run. Use GG for firmware updates."/>
-                            <Button Content="Let GG start with Windows again" Command="{Binding RestoreGGCommand}" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}" Margin="0,14,0,0">
-                        <StackPanel>
-                            <TextBlock Text="ABOUT" Style="{StaticResource Heading}"/>
-                            <TextBlock Style="{StaticResource Hint}">
-                                <Run Text="AudioMixer is open source and not affiliated with SteelSeries."/>
-                                <LineBreak/>
-                                <Hyperlink NavigateUri="https://github.com/Marleybop/AudioMixer" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">github.com/Marleybop/AudioMixer</Hyperlink>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
         </TabItem>
     </TabControl>
 </Window>

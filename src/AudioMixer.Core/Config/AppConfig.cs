@@ -32,11 +32,22 @@ public sealed class AppConfig
 
     public HeadsetConfig Headset { get; set; } = new();
 
+    /// <summary>Per-channel sound and device choices. Missing channels are filled in on first use.</summary>
+    public Dictionary<Channel, ChannelConfig> Channels { get; set; } = [];
+
+    public ChannelConfig ForChannel(Channel channel)
+    {
+        if (!Channels.TryGetValue(channel, out var c))
+            Channels[channel] = c = new ChannelConfig();
+        return c;
+    }
+
     // ---- Persistence ----
 
     static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter() },
     };
 
@@ -69,8 +80,32 @@ public sealed class AppConfig
     }
 }
 
+public sealed class ChannelConfig
+{
+    /// <summary>A device this channel always uses (render id; capture id for the mic). Null = follow the priority list.</summary>
+    public DeviceRef? Device { get; set; }
+
+    /// <summary>The channel's EQ and effects. Null until first read from the APO (carries over what Sonar had).</summary>
+    public SoundSettings? Sound { get; set; }
+
+    /// <summary>The preset the sound came from, shown on the channel strip.</summary>
+    public string PresetName { get; set; } = "Custom";
+
+    /// <summary>True once the sound has been edited since the preset was picked.</summary>
+    public bool Modified { get; set; }
+}
+
 public sealed class HeadsetConfig
 {
     /// <summary>Notify when the headset battery drops to or below this percent (0 = off).</summary>
     public int LowBatteryWarningPercent { get; set; } = 25;
+
+    /// <summary>What the base station's screen shows: BaseStation (its own), Widget (AudioMixer's) or Off.</summary>
+    public string Screen { get; set; } = "BaseStation";
+
+    /// <summary>The picture or GIF (file name in the Screens folder) shown when <see cref="Screen"/> is Custom.</summary>
+    public string? ScreenImage { get; set; }
+
+    /// <summary>Blank the base station's screen after this many minutes without keyboard, mouse or dial use (0 = never).</summary>
+    public int ScreenSleepMinutes { get; set; }
 }

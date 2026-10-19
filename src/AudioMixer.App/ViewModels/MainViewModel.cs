@@ -1,5 +1,7 @@
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AudioMixer.App.Services;
 using AudioMixer.Core.Audio;
@@ -24,6 +26,11 @@ public sealed partial class MainViewModel : ObservableObject
     readonly DispatcherTimer _flashDebounce;
     readonly DispatcherTimer _meterTimer;
     readonly DispatcherTimer _appsTimer;
+    readonly DispatcherTimer _headsetReload;
+    readonly DispatcherTimer _soundSave;
+    readonly DispatcherTimer _toastTimer;
+    readonly PresetStore _presets = new();
+    readonly OledWidget _oled;
     readonly List<ChannelStripViewModel> _allStrips = [];
     bool _loadingHeadset;
     bool _lowBatteryNotified;
@@ -38,11 +45,19 @@ public sealed partial class MainViewModel : ObservableObject
         _saveDebounce = Debounce(400, SaveConfig);
         _eqDebounce = Debounce(150, ApplyEq);
         // Settings changed on the base station are written to its flash once things go quiet.
-        _flashDebounce = Debounce(3000, () => Try(_host.Headset.SaveToFlash));
+        // Base station changes are read back once things go quiet; if they took, they're stored in its flash.
+        _flashDebounce = Debounce(1200, () => _ = VerifyAndSaveHeadsetAsync());
+        _toastTimer = Debounce(2800, () => ToastVisible = false);
+        _oled = new OledWidget(host.Headset);
+        _oled.Rendered += (_, image) => OledPreview = image;
         _meterTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
         _meterTimer.Tick += (_, _) => UpdateMeters();
         _appsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _appsTimer.Tick += (_, _) => UpdateApps();
+        // Settings changed on the base station's own menu arrive one push at a time; re-read once they settle.
+        _headsetReload = Debounce(400, () => _ = LoadHeadsetSettingsAsync());
+        // EQ edits only need writing to disk; the router doesn't care about them.
+        _soundSave = Debounce(800, () => Try(() => _host.Config.Save()));
 
         if (host.Sonar is { } sonar)
         {
@@ -56,11 +71,14 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(ChannelStripViewModel.Muted))
             {
+                UpdateOled();
                 OnPropertyChanged(nameof(MicStatusText));
                 OnPropertyChanged(nameof(IsMicSilenced));
             }
         };
         _allStrips.Add(MicStrip);
+        if (host.Sonar is { } engine)
+            CreateSounds(engine);
         for (var i = 0; i < 10; i++)
             EqBands.Add(new EqBandViewModel(EqBandLabels[i], OnEqBandChanged));
 
@@ -82,11 +100,21 @@ public sealed partial class MainViewModel : ObservableObject
             if (c) _ = LoadHeadsetSettingsAsync();
             else UpdateHeadset(null);
         });
-        host.Headset.ChatMixChanged += (_, d) => _ui.BeginInvoke(() => SetChatMixFromDial(d.Game, d.Chat));
-        host.Headset.VolumeChanged += (_, v) => _ui.BeginInvoke(() => HeadsetVolume = v);
+        host.Headset.ChatMixChanged += (_, d) => _ui.BeginInvoke(() =>
+        {
+            _oled.NotifyActivity();
+            SetChatMixFromDial(d.Game, d.Chat);
+        });
+        host.Headset.VolumeChanged += (_, v) => _ui.BeginInvoke(() =>
+        {
+            _oled.NotifyActivity();
+            HeadsetVolume = v;
+        });
+        host.Headset.SettingsChanged += (_, _) => _ui.BeginInvoke(() => Restart(_headsetReload));
         host.ActiveChanged += (_, _) => _ui.BeginInvoke(() =>
         {
             UpdateActivation();
+            ApplyAllSounds();
             if (host.Router is { } router)
                 router.StateChanged += (_, s) => _ui.BeginInvoke(() => UpdateRoute(s));
         });
@@ -96,6 +124,175 @@ public sealed partial class MainViewModel : ObservableObject
         BaseStationConnected = host.Headset.IsConnected;
         if (BaseStationConnected)
             _ = LoadHeadsetSettingsAsync();
+        if (host.IsActive)
+            ApplyAllSounds();
+        _screenMode = Enum.TryParse<ScreenMode>(host.Config.Headset.Screen, out var mode) ? mode : ScreenMode.BaseStation;
+        _screenSleepMinutes = host.Config.Headset.ScreenSleepMinutes;
+        _oled.SleepAfter = _screenSleepMinutes > 0 ? TimeSpan.FromMinutes(_screenSleepMinutes) : null;
+        _oled.SleepChanged += (_, asleep) => OnPropertyChanged(nameof(ScreenSleepText));
+        RefreshScreenImages();
+        _selectedScreenImage = ScreenImages.FirstOrDefault(n => n == host.Config.Headset.ScreenImage) ?? ScreenImages.FirstOrDefault();
+        _oled.LoadCustom(ScreenImagePath(_selectedScreenImage));
+        WatchScreensFolder();
+        UpdateOled();
+        _oled.Mode = _screenMode;
+    }
+
+    // ===== Base station screen =====
+
+    public static IReadOnlyList<Option> ScreenOptions { get; } =
+        [new(ScreenMode.BaseStation, "Base station's own"), new(ScreenMode.Widget, "AudioMixer widget"), new(ScreenMode.Custom, "Your picture"), new(ScreenMode.Off, "Off")];
+
+    public static IReadOnlyList<Option> ScreenSleepOptions { get; } =
+        [new(0, "Never"), new(5, "5 min"), new(15, "15 min"), new(30, "30 min"), new(60, "1 hour"), new(120, "2 hours")];
+
+    /// <summary>File names in the Screens folder.</summary>
+    public ObservableCollection<string> ScreenImages { get; } = [];
+    [ObservableProperty] string? _selectedScreenImage;
+    [ObservableProperty] int _screenSleepMinutes;
+    public bool IsCustomScreen => ScreenMode == ScreenMode.Custom;
+    public string ScreenSleepText => _oled.IsAsleep ? "Asleep now. Use the keyboard, mouse or dial to wake it." : "";
+    FileSystemWatcher? _screensWatcher;
+
+    static string? ScreenImagePath(string? name) => name is null ? null : Path.Combine(OledWidget.ScreensFolder, name);
+
+    void RefreshScreenImages()
+    {
+        var names = Directory.Exists(OledWidget.ScreensFolder)
+            ? Directory.EnumerateFiles(OledWidget.ScreensFolder)
+                .Where(f => OledWidget.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .Select(Path.GetFileName).OfType<string>().OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList()
+            : [];
+        if (names.SequenceEqual(ScreenImages))
+            return;
+        var selected = SelectedScreenImage;
+        ScreenImages.Clear();
+        foreach (var n in names)
+            ScreenImages.Add(n);
+        SelectedScreenImage = names.Contains(selected ?? "") ? selected : names.FirstOrDefault();
+    }
+
+    void WatchScreensFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(OledWidget.ScreensFolder);
+            _screensWatcher = new FileSystemWatcher(OledWidget.ScreensFolder) { EnableRaisingEvents = true };
+            FileSystemEventHandler changed = (_, e) => _ui.BeginInvoke(() =>
+            {
+                RefreshScreenImages();
+                // A picture that is being used was replaced: show the new one.
+                if (string.Equals(e.Name, SelectedScreenImage, StringComparison.OrdinalIgnoreCase))
+                    _oled.LoadCustom(ScreenImagePath(SelectedScreenImage));
+            });
+            _screensWatcher.Created += changed;
+            _screensWatcher.Deleted += changed;
+            _screensWatcher.Changed += changed;
+            _screensWatcher.Renamed += (_, _) => _ui.BeginInvoke(RefreshScreenImages);
+        }
+        catch (Exception) { }
+    }
+
+    partial void OnSelectedScreenImageChanged(string? value)
+    {
+        _oled.LoadCustom(ScreenImagePath(value), error => Toast(error, error: true));
+        QueueSave();
+    }
+
+    partial void OnScreenSleepMinutesChanged(int value)
+    {
+        _oled.SleepAfter = value > 0 ? TimeSpan.FromMinutes(value) : null;
+        QueueSave();
+        Toast(value > 0 ? $"The base station's screen turns off after {ScreenSleepOptions.First(o => (int)o.Value == value).Label} without use" : "Screen sleep off");
+    }
+
+    [RelayCommand]
+    void OpenScreensFolder()
+    {
+        Directory.CreateDirectory(OledWidget.ScreensFolder);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(OledWidget.ScreensFolder) { UseShellExecute = true });
+    }
+
+    [ObservableProperty] ScreenMode _screenMode;
+    [ObservableProperty] System.Windows.Media.ImageSource? _oledPreview;
+
+    partial void OnScreenModeChanged(ScreenMode value)
+    {
+        OnPropertyChanged(nameof(IsCustomScreen));
+        _oled.Mode = value;
+        QueueSave();
+        Toast(value switch
+        {
+            ScreenMode.Widget => "The base station now shows battery, mic and volume",
+            ScreenMode.Off => "The base station's screen is off while AudioMixer runs",
+            ScreenMode.Custom => ScreenImages.Count == 0 ? "Put a picture or GIF in the Screens folder first" : $"The base station now shows {SelectedScreenImage}",
+            _ => "The base station shows its own screen again",
+        });
+    }
+
+    void UpdateOled() => _oled.Update(new WidgetState(HeadsetOn, HeadsetBattery, SpareBattery,
+        _status?.Charge == ChargeState.Charging, IsMicSilenced, HeadsetVolume, BaseAudioSettings.MaxVolume));
+
+    /// <summary>Hands the base station's screen back when AudioMixer quits.</summary>
+    public void Shutdown() => _oled.Release();
+
+    // ===== Sound (EQ and effects) =====
+
+    /// <summary>One per channel, in mixer order; the EQ page edits <see cref="SelectedSound"/>.</summary>
+    public ObservableCollection<ChannelSoundViewModel> Sounds { get; } = [];
+    [ObservableProperty] ChannelSoundViewModel? _selectedSound;
+    /// <summary>The page shown: 0 Mixer, 1 EQ, 2 Devices, 3 Headset, 4 Settings.</summary>
+    [ObservableProperty] int _selectedTab;
+
+    void CreateSounds(SonarEngine sonar)
+    {
+        var sonarPresets = SonarPresets.Load();
+        var firstRun = false;
+        foreach (var strip in _allStrips)
+        {
+            var config = _host.Config.ForChannel(strip.Channel);
+            if (config.Sound is null)
+            {
+                // First run: carry over exactly what Sonar had set, under the name Sonar showed.
+                firstRun = true;
+                try { config.Sound = SoundApo.FromApo(sonar, strip.Channel); }
+                catch (Exception) { config.Sound = SoundSettings.Flat(strip.Channel); }
+                var selected = sonarPresets.FirstOrDefault(p => p.Channel == strip.Channel && p.IsSelectedInSonar);
+                config.PresetName = selected?.Name ?? "Custom";
+                config.Modified = false;
+            }
+            var color = new SolidColorBrush(ChannelStripViewModel.ColorOf(strip.Channel));
+            color.Freeze();
+            var sound = new ChannelSoundViewModel(strip.Channel, strip.Name, color, config, _presets, sonarPresets,
+                (channel, settings) => Try(() => sonar.ApplySound(channel, settings)), () => Restart(_soundSave));
+            sound.Notice += (_, text) => Toast(text);
+            strip.Sound = sound;
+            Sounds.Add(sound);
+        }
+        SelectedSound = Sounds.FirstOrDefault();
+        if (firstRun)
+            Try(() => _host.Config.Save());
+    }
+
+    /// <summary>Makes the engine match every channel's saved sound (when we take over from GG, or start in control).</summary>
+    void ApplyAllSounds()
+    {
+        if (!_host.IsActive || _host.Sonar is not { } sonar)
+            return;
+        foreach (var sound in Sounds)
+            Try(() => sonar.ApplySound(sound.Channel, _host.Config.ForChannel(sound.Channel).Sound!, force: true));
+    }
+
+    [RelayCommand]
+    void OpenHeadset() => SelectedTab = 3;
+
+    [RelayCommand]
+    void OpenSound(ChannelStripViewModel? strip)
+    {
+        if (strip?.Sound is null)
+            return;
+        SelectedSound = strip.Sound;
+        SelectedTab = 1;
     }
 
     DispatcherTimer Debounce(int milliseconds, Action action)
@@ -131,6 +328,20 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    // ===== Toast: a short "done" message after each change =====
+
+    [ObservableProperty] string _toastText = "";
+    [ObservableProperty] bool _toastIsError;
+    [ObservableProperty] bool _toastVisible;
+
+    public void Toast(string text, bool error = false)
+    {
+        ToastText = text;
+        ToastIsError = error;
+        ToastVisible = true;
+        Restart(_toastTimer);
+    }
+
     // ===== Status =====
 
     [ObservableProperty] bool _isActive;
@@ -154,6 +365,11 @@ public sealed partial class MainViewModel : ObservableObject
         : !HeadsetOn ? "Headset off"
         : $"Headset {HeadsetBattery}%  ·  spare {SpareBattery}%  ·  {ChargeText}";
 
+    /// <summary>One plain line about the headset for the mixer and the sidebar.</summary>
+    public string HeadsetStateText => !BaseStationConnected ? "Base station not found. Is it plugged in?"
+        : !HeadsetOn ? "Headset is off"
+        : $"Connected · {ChargeText}";
+
     /// <summary>Short status for the title bar.</summary>
     public string HeaderStatus => !BaseStationConnected ? "BASE STATION NOT FOUND"
         : !HeadsetOn ? "HEADSET OFF"
@@ -162,7 +378,7 @@ public sealed partial class MainViewModel : ObservableObject
     public string TrayTooltip => $"AudioMixer\n{HeadsetSummary}\nOutput: {OutputName}";
 
     /// <summary>The mic's state across the headset's own mute switch and our software mute.</summary>
-    public string MicStatusText => MicMuted ? "Muted on headset" : MicStrip.Muted ? "Muted" : "Live";
+    public string MicStatusText => MicMuted ? "Mic muted on headset" : MicStrip.Muted ? "Mic muted" : "Mic live";
 
     /// <summary>True when nothing from the mic reaches apps, whichever mute did it.</summary>
     public bool IsMicSilenced => MicMuted || MicStrip.Muted;
@@ -174,6 +390,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnChargeTextChanged(string value) => RaiseSummary();
     partial void OnMicMutedChanged(bool value)
     {
+        UpdateOled();
         OnPropertyChanged(nameof(MicStatusText));
         OnPropertyChanged(nameof(IsMicSilenced));
     }
@@ -181,8 +398,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     void RaiseSummary()
     {
+        UpdateOled();
         OnPropertyChanged(nameof(HeadsetSummary));
         OnPropertyChanged(nameof(HeaderStatus));
+        OnPropertyChanged(nameof(HeadsetStateText));
         OnPropertyChanged(nameof(TrayTooltip));
         UpdateStatusRows();
     }
@@ -194,7 +413,12 @@ public sealed partial class MainViewModel : ObservableObject
         SonarAvailable = _host.Sonar is not null;
         SonarStatus = _host.Sonar is not null ? "Sonar audio engine available" : _host.SonarError ?? "Sonar not available";
         if (!IsActive)
+        {
             OutputName = InputName = "set by SteelSeries GG";
+            _autoOutput.Label = _autoInput.Label = "Automatic";
+            foreach (var strip in _allStrips)
+                strip.DeviceName = "Set by SteelSeries GG";
+        }
         foreach (var strip in _allStrips) strip.Refresh();
     }
 
@@ -216,12 +440,12 @@ public sealed partial class MainViewModel : ObservableObject
         };
         NoiseControlText = s?.NoiseControl switch
         {
-            NoiseControl.Anc => "ANC",
+            NoiseControl.Anc => "Noise cancelling",
             NoiseControl.Transparency => "Transparency",
-            NoiseControl.Off => "Off",
+            NoiseControl.Off => "Noise control off",
             _ => "—",
         };
-        BluetoothText = s is null ? "—" : s.BluetoothOn ? "On" : "Off";
+        BluetoothText = s is null ? "—" : s.BluetoothOn ? "Bluetooth on" : "Bluetooth off";
 
         if (s is not null)
         {
@@ -257,6 +481,11 @@ public sealed partial class MainViewModel : ObservableObject
         OutputName = s.Output?.Name ?? "None available";
         InputName = s.Input?.Name ?? "None available";
         Problems = string.Join("\n", s.Problems);
+        _autoOutput.Label = $"Auto · {OutputName}";
+        _autoInput.Label = $"Auto · {InputName}";
+        foreach (var strip in _allStrips)
+            strip.DeviceName = strip.IsMic ? InputName
+                : s.ChannelOutputs.TryGetValue(strip.Channel, out var o) ? o?.Name ?? "None available" : OutputName;
         foreach (var d in OutputDevices) d.IsCurrent = d.Id == s.Output?.Id;
         foreach (var d in InputDevices) d.IsCurrent = d.Id == s.Input?.Id;
     }
@@ -276,8 +505,45 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<ChannelToggleViewModel> ChannelToggles { get; } = [];
     public ChannelStripViewModel MicStrip { get; }
 
+    /// <summary>Channels you can add to the mixer (turned off in Windows while they're not in it).</summary>
+    public ObservableCollection<ChannelStripViewModel> HiddenChannels { get; } = [];
+    public bool CanAddChannel => HiddenChannels.Count > 0;
+
+    /// <summary>Media and Aux are optional; Game, Chat and Mic are what Windows' default devices point at.</summary>
+    public static bool IsRemovable(Channel channel) => channel is Channel.Media or Channel.Aux;
+
+    [RelayCommand]
+    void AddChannel(ChannelStripViewModel? strip) => SetChannelShown(strip, true);
+
+    [RelayCommand]
+    void RemoveChannel(ChannelStripViewModel? strip) => SetChannelShown(strip, false);
+
+    void SetChannelShown(ChannelStripViewModel? strip, bool shown)
+    {
+        var toggle = ChannelToggles.FirstOrDefault(t => t.Strip == strip);
+        if (toggle is null || toggle.IsShown == shown)
+            return;
+        toggle.IsShown = shown; // rebuilds and saves
+        var endpoint = _host.Endpoints.GetAll().FirstOrDefault(e => e.SonarChannel == toggle.Channel && e.Flow == EndpointFlow.Output);
+        try
+        {
+            if (endpoint is not null)
+                PolicyConfig.SetEnabled(endpoint.Id, shown);
+            Toast(shown ? $"{toggle.Name} added: apps can now pick “{endpoint?.Name ?? toggle.Name}”"
+                        : $"{toggle.Name} removed and turned off in Windows");
+        }
+        catch (Exception e)
+        {
+            Toast($"Couldn't switch {toggle.Name} in Windows: {e.Message}", error: true);
+        }
+    }
+
     void RebuildChannels()
     {
+        HiddenChannels.Clear();
+        foreach (var toggle in ChannelToggles.Where(t => !t.IsShown && IsRemovable(t.Channel)))
+            HiddenChannels.Add(toggle.Strip);
+        OnPropertyChanged(nameof(CanAddChannel));
         Channels.Clear();
         foreach (var toggle in ChannelToggles.Where(t => t.IsShown))
             Channels.Add(toggle.Strip);
@@ -301,7 +567,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var strip in Channels)
         {
             var apps = _monitor.GetApps(strip.Channel);
-            strip.Apps = strip.IsMic ? InputName : apps.Count == 0 ? "No apps playing" : string.Join(", ", apps);
+            strip.Apps = strip.IsMic ? "Apps record this as “Sonar - Microphone”" : apps.Count == 0 ? "No apps playing" : string.Join(", ", apps);
         }
     }
 
@@ -309,8 +575,22 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] double _chatMix;
     bool _chatMixFromDial;
 
-    public int ChatMixGamePercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Game * 100);
-    public int ChatMixChatPercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Chat * 100);
+    // With ChatMix off both stay at full volume, whatever the dial says.
+    public int ChatMixGamePercent => ChatMixEnabled ? (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Game * 100) : 100;
+    public int ChatMixChatPercent => ChatMixEnabled ? (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Chat * 100) : 100;
+
+    /// <summary>Picks up where the dial is (it may have moved while ChatMix was off).</summary>
+    async Task RefreshChatMixFromBaseAsync()
+    {
+        try
+        {
+            var a = await _host.Headset.GetAudioSettingsAsync();
+            SetChatMixFromDial(a.ChatMixGame, a.ChatMixChat);
+            if (_host.Sonar is { } sonar && ChatMixEnabled)
+                sonar.SetChatMixBalance((float)(ChatMix / 100));
+        }
+        catch (Exception) { }
+    }
 
     void SetChatMixFromDial(int game, int chat)
     {
@@ -323,14 +603,26 @@ public sealed partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ChatMixGamePercent));
         OnPropertyChanged(nameof(ChatMixChatPercent));
-        // Dial changes are already applied by the router; only push bar drags.
-        if (!_chatMixFromDial && IsActive && _host.Sonar is { } sonar && _host.Config.ChatMixEnabled)
-            Try(() => sonar.SetChatMixBalance((float)(value / 100)));
+        // The bar only shows the dial: the base station has no command to move its own ChatMix,
+        // so letting the app change it would leave the two out of step.
     }
 
     [ObservableProperty] bool _chatMixEnabled;
 
-    partial void OnChatMixEnabledChanged(bool value) => QueueSave();
+    partial void OnChatMixEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ChatMixGamePercent));
+        OnPropertyChanged(nameof(ChatMixChatPercent));
+        if (IsActive)
+        {
+            // Same switch as Sonar's: turns ChatMix on the base station's dial on or off.
+            Try(() => _host.Headset.SetSoftwareChatMix(value));
+            Toast(value ? "ChatMix on: the base station dial balances Game and Chat" : "ChatMix off: Game and Chat both at full volume");
+            if (value)
+                _ = RefreshChatMixFromBaseAsync();
+        }
+        QueueSave();
+    }
 
     [RelayCommand]
     void ToggleMicMute() => MicStrip.Muted = !MicStrip.Muted;
@@ -345,7 +637,45 @@ public sealed partial class MainViewModel : ObservableObject
         var all = _host.Endpoints.GetAll().Where(e => !e.IsVirtual).ToList();
         Sync(OutputDevices, _host.Config.OutputPriority, all.Where(e => e.Flow == EndpointFlow.Output).ToList(), EndpointFlow.Output);
         Sync(InputDevices, _host.Config.InputPriority, all.Where(e => e.Flow == EndpointFlow.Input).ToList(), EndpointFlow.Input);
+        RefreshDeviceChoices(all);
         UpdateRoute(_host.Router?.State);
+    }
+
+    readonly DeviceChoice _autoOutput = new(null, "Automatic");
+    readonly DeviceChoice _autoInput = new(null, "Automatic");
+
+    /// <summary>Rebuilds each strip's device picker: Automatic, then the usable devices (plus the pinned one if it's away).</summary>
+    void RefreshDeviceChoices(List<AudioEndpoint> all)
+    {
+        List<DeviceChoice> Build(EndpointFlow flow, DeviceChoice auto, DeviceRef? pinned)
+        {
+            var list = new List<DeviceChoice> { auto };
+            list.AddRange(all.Where(e => e.Flow == flow && e.State == EndpointState.Active && !_host.Config.Blocked.Any(b => b.Id == e.Id))
+                .OrderBy(e => e.DisplayName).Select(e => new DeviceChoice(e.Id, e.DisplayName)));
+            if (pinned is not null && list.All(c => c.Id != pinned.Id))
+                list.Add(new DeviceChoice(pinned.Id, $"{pinned.Name} (not connected)"));
+            return list;
+        }
+
+        foreach (var strip in _allStrips)
+        {
+            var pinned = _host.Config.ForChannel(strip.Channel).Device;
+            strip.DeviceChoices = strip.IsMic ? Build(EndpointFlow.Input, _autoInput, pinned) : Build(EndpointFlow.Output, _autoOutput, pinned);
+            strip.ShowDevice(strip.DeviceChoices.FirstOrDefault(c => c.Id == pinned?.Id) ?? strip.DeviceChoices[0]);
+            strip.DeviceChosen -= OnStripDeviceChosen;
+            strip.DeviceChosen += OnStripDeviceChosen;
+        }
+    }
+
+    void OnStripDeviceChosen(object? sender, EventArgs e)
+    {
+        if (sender is not ChannelStripViewModel { SelectedDevice: { } choice } strip)
+            return;
+        _host.Config.ForChannel(strip.Channel).Device = choice.Id is null ? null
+            : new DeviceRef(choice.Id, choice.Label.Replace(" (not connected)", ""));
+        SaveConfig();
+        var name = choice.Id is null ? "the first available device" : choice.Label;
+        Toast(strip.IsMic ? $"Mic now uses {name}" : $"{strip.Name} now plays on {name}");
     }
 
     /// <summary>Endpoint ids encode their direction: render ids start {0.0.0…}, capture ids {0.0.1…}.</summary>
@@ -462,6 +792,11 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] int _sleepAfterMinutes;
     [ObservableProperty] bool _rangeMode;
     [ObservableProperty] string _baseInput = "—";
+    [ObservableProperty] int _streamMain = 100;
+    [ObservableProperty] int _streamAux = 100;
+    [ObservableProperty] int _streamMic = 100;
+    [ObservableProperty] string _firmwareText = "";
+    public bool IsStreamMix => LineOut == LineOutMode.StreamMix;
     [ObservableProperty] int _lowBatteryWarning;
     [ObservableProperty] IReadOnlyList<StatusRow> _statusRows = [];
 
@@ -471,6 +806,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var a = await _host.Headset.GetAudioSettingsAsync();
             var ux = await _host.Headset.GetUxSettingsAsync();
+            var firmware = await _host.Headset.GetFirmwareAsync();
             _loadingHeadset = true;
             for (var i = 0; i < 10; i++)
                 EqBands[i].Gain = a.CustomEqDb[i];
@@ -481,9 +817,16 @@ public sealed partial class MainViewModel : ObservableObject
             LineOut = a.LineOut;
             HeadsetVolume = a.Volume;
             BaseInput = a.InputName;
+            SetChatMixFromDial(a.ChatMixGame, a.ChatMixChat);
             Brightness = Math.Clamp(ux.Brightness, 1, 10);
             DimAfterMinutes = ux.DimAfterMinutes;
             SimpleHomeScreen = ux.SimpleHomeScreen;
+            StreamMain = a.StreamMain;
+            StreamAux = a.StreamAux;
+            StreamMic = a.StreamMic;
+            FirmwareText = string.IsNullOrEmpty(firmware.HeadsetMcu)
+                ? $"base {firmware.BaseMcu}"
+                : $"base {firmware.BaseMcu} · headset {firmware.HeadsetMcu}";
         }
         catch (Exception)
         {
@@ -509,24 +852,81 @@ public sealed partial class MainViewModel : ObservableObject
             new("Headset battery", $"{HeadsetBattery}%"),
             new("Spare battery", $"{SpareBattery}%"),
             new("2.4 GHz link", HeadsetOn ? "Connected" : "Not connected", HeadsetOn),
-            new("Bluetooth", BluetoothText),
-            new("Mic", MicStatusText, !MicMuted),
-            new("Noise mode", NoiseControlText),
+            new("Bluetooth", s.BluetoothOn ? "On" : "Off"),
+            new("Mic", MicMuted ? "Muted on headset" : MicStrip.Muted ? "Muted in AudioMixer" : "Live", !IsMicSilenced),
+            new("Noise control", s.NoiseControl switch { NoiseControl.Anc => "Noise cancelling", NoiseControl.Transparency => "Transparency", _ => "Off" }),
             new("Transparency level", $"{s.TransparencyLevel} / 10"),
             new("Volume (dial)", $"{HeadsetVolume} / {BaseAudioSettings.MaxVolume}"),
             new("Input", BaseInput),
+            new("Firmware", FirmwareText),
         ];
     }
 
-    partial void OnHeadsetVolumeChanged(int value) => UpdateStatusRows();
+    partial void OnHeadsetVolumeChanged(int value)
+    {
+        UpdateStatusRows();
+        UpdateOled();
+    }
 
     /// <summary>Sends a setting to the base station unless the value came from the base station itself.</summary>
     void SendSetting(Action send)
     {
         if (_loadingHeadset || !BaseStationConnected)
             return;
-        Try(send);
-        Restart(_flashDebounce);
+        try
+        {
+            send();
+            Restart(_flashDebounce);
+        }
+        catch (Exception e)
+        {
+            Toast($"Couldn't send that to the base station: {e.Message}", error: true);
+        }
+    }
+
+    /// <summary>Reads the base station back and checks it holds what the app shows, then stores it in flash.</summary>
+    async Task VerifyAndSaveHeadsetAsync()
+    {
+        try
+        {
+            var a = await _host.Headset.GetAudioSettingsAsync();
+            var ux = await _host.Headset.GetUxSettingsAsync();
+            var w = HeadsetStatus.FromWirelessSettings(await _host.Headset.QueryAsync(NovaProProtocol.WirelessSettings));
+            var wrong = new List<string>();
+            void Check(bool ok, string name) { if (!ok) wrong.Add(name); }
+            Check(a.EqPreset == EqPreset, "EQ preset");
+            if (EqPreset == 4)
+                Check(EqBands.Select((b, i) => Math.Abs(b.Gain - a.CustomEqDb[i]) < 0.26).All(x => x), "EQ bands");
+            Check(a.HighGain == HighGain, "high mic gain");
+            Check(a.Sidetone == Sidetone, "sidetone");
+            Check(a.MicVolume == MicVolume, "mic volume");
+            Check(a.LineOut == LineOut, "line out");
+            if (LineOut == LineOutMode.StreamMix)
+                Check(a.StreamMain == StreamMain && a.StreamAux == StreamAux && a.StreamMic == StreamMic, "stream mix");
+            Check(ux.Brightness == Brightness, "screen brightness");
+            Check(ux.DimAfterMinutes == DimAfterMinutes, "dim timer");
+            Check(ux.SimpleHomeScreen == SimpleHomeScreen, "home screen");
+            Check(w.BluetoothOnAtStartup == BluetoothOnAtStartup, "Bluetooth at startup");
+            Check(w.BluetoothCallMode == CallMode, "Bluetooth calls");
+            Check(w.MutedMicBrightness == MutedMicBrightness, "mute light");
+            Check(w.SleepAfterMinutes == SleepAfterMinutes, "sleep timer");
+            Check(w.RangeMode == RangeMode, "wireless mode");
+            if (wrong.Count == 0)
+            {
+                _host.Headset.SaveToFlash();
+                Toast("Saved to the base station");
+            }
+            else
+            {
+                Toast($"The base station didn't keep: {string.Join(", ", wrong)}. Showing what it has now.", error: true);
+                UpdateHeadset(w);
+                await LoadHeadsetSettingsAsync();
+            }
+        }
+        catch (Exception)
+        {
+            Toast("Couldn't reach the base station to check the change.", error: true);
+        }
     }
 
     void OnEqBandChanged()
@@ -563,7 +963,15 @@ public sealed partial class MainViewModel : ObservableObject
         if (value < 1) MicVolume = 1;
         else SendSetting(() => _host.Headset.SetMicVolume(value));
     }
-    partial void OnLineOutChanged(LineOutMode value) => SendSetting(() => _host.Headset.SetLineOutMode(value));
+    partial void OnLineOutChanged(LineOutMode value)
+    {
+        OnPropertyChanged(nameof(IsStreamMix));
+        SendSetting(() => _host.Headset.SetLineOutMode(value));
+    }
+    partial void OnStreamMainChanged(int value) => SendStreamMix();
+    partial void OnStreamAuxChanged(int value) => SendStreamMix();
+    partial void OnStreamMicChanged(int value) => SendStreamMix();
+    void SendStreamMix() => SendSetting(() => _host.Headset.SetStreamMix(StreamMain, StreamAux, StreamMic));
     partial void OnBrightnessChanged(int value)
     {
         if (value < 1) Brightness = 1;
@@ -645,7 +1053,14 @@ public sealed partial class MainViewModel : ObservableObject
             DefaultPlaybackChannel = old.DefaultPlaybackChannel,
             ChatMixEnabled = ChatMixEnabled,
             MixerChannels = ChannelToggles.Where(t => t.IsShown).Select(t => t.Channel).ToList(),
-            Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning },
+            Headset = new HeadsetConfig
+            {
+                LowBatteryWarningPercent = LowBatteryWarning,
+                Screen = ScreenMode.ToString(),
+                ScreenImage = SelectedScreenImage,
+                ScreenSleepMinutes = ScreenSleepMinutes,
+            },
+            Channels = old.Channels,
         };
         _host.SaveConfig(config);
         if (_host.Sonar is { } sonar && IsActive)
