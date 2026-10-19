@@ -61,8 +61,6 @@ public sealed partial class MainViewModel : ObservableObject
             }
         };
         _allStrips.Add(MicStrip);
-        foreach (var strip in _allStrips)
-            strip.FadeChanged += (_, _) => QueueSave();
         for (var i = 0; i < 10; i++)
             EqBands.Add(new EqBandViewModel(EqBandLabels[i], OnEqBandChanged));
 
@@ -307,11 +305,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>ChatMix position, −100 (all game/other) … +100 (all chat).</summary>
+    /// <summary>ChatMix position, −100 (all game) … +100 (all chat).</summary>
     [ObservableProperty] double _chatMix;
     bool _chatMixFromDial;
 
-    public int ChatMixOtherPercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Other * 100);
+    public int ChatMixGamePercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Game * 100);
     public int ChatMixChatPercent => (int)Math.Round(SonarEngine.ChatMixGains((float)(ChatMix / 100)).Chat * 100);
 
     void SetChatMixFromDial(int game, int chat)
@@ -323,11 +321,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     partial void OnChatMixChanged(double value)
     {
-        OnPropertyChanged(nameof(ChatMixOtherPercent));
+        OnPropertyChanged(nameof(ChatMixGamePercent));
         OnPropertyChanged(nameof(ChatMixChatPercent));
         // Dial changes are already applied by the router; only push bar drags.
         if (!_chatMixFromDial && IsActive && _host.Sonar is { } sonar && _host.Config.ChatMixEnabled)
-            Try(() => sonar.SetChatMixBalance((float)(value / 100), _host.Config.ChatMixFadedChannels));
+            Try(() => sonar.SetChatMixBalance((float)(value / 100)));
     }
 
     [ObservableProperty] bool _chatMixEnabled;
@@ -615,8 +613,6 @@ public sealed partial class MainViewModel : ObservableObject
     void LoadConfigIntoView(AppConfig c)
     {
         _chatMixEnabled = c.ChatMixEnabled;
-        foreach (var strip in _allStrips)
-            strip.LoadFade(c.ChatMixFadedChannels.Contains(strip.Channel));
         _manageWindowsDefaults = c.ManageWindowsDefaults;
         _lowBatteryWarning = c.Headset.LowBatteryWarningPercent;
         _startWithWindows = Autostart.IsEnabled;
@@ -638,7 +634,6 @@ public sealed partial class MainViewModel : ObservableObject
     void SaveConfig()
     {
         var old = _host.Config;
-        var faded = _allStrips.Where(s => s.CanFade && s.FadesWithChatMix).Select(s => s.Channel).ToList();
         var config = new AppConfig
         {
             OutputPriority = OutputDevices.Where(d => d.Enabled && !d.Blocked).Select(d => new DeviceRef(d.Id, d.Name)).ToList(),
@@ -649,13 +644,12 @@ public sealed partial class MainViewModel : ObservableObject
             ManageWindowsDefaults = ManageWindowsDefaults,
             DefaultPlaybackChannel = old.DefaultPlaybackChannel,
             ChatMixEnabled = ChatMixEnabled,
-            ChatMixFadedChannels = faded,
             MixerChannels = ChannelToggles.Where(t => t.IsShown).Select(t => t.Channel).ToList(),
             Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning },
         };
         _host.SaveConfig(config);
         if (_host.Sonar is { } sonar && IsActive)
-            Try(() => sonar.SetChatMixBalance((float)(ChatMix / 100), config.ChatMixEnabled ? faded : []));
+            Try(() => sonar.SetChatMixBalance(config.ChatMixEnabled ? (float)(ChatMix / 100) : 0));
     }
 }
 

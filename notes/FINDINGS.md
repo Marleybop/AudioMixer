@@ -35,8 +35,8 @@ Cite addresses for every claim.
 - Input reports reach every open handle, so replies to the Engine's own queries appear in our reads (`06 20`, `06 10`). CONFIRMED.
 
 ## Prior work
-- The author's earlier hardware research on this base station (Aug 2026) is kept privately and is not part of this repository.
-- The patched bootloader in HANDOVER.md is on the user's **old** base station (in storage). The unit in use now is a **replacement with stock firmware/bootloader** (user, 2026-10-18).
+- My earlier hardware research on this base station (Aug 2026) is kept privately and is not part of this repository.
+- My original base station (now in storage) had a patched bootloader. The unit I use now is a **replacement with stock firmware/bootloader**.
 - Still, the app never needs `06 EB` (reboot to bootloader), `06 A1` (flash), `06 BB` (handover), `06 01` (reset_mcu) or any fw_update,
   and it ships to other people, so the allowlist keeps blocking them (firmware updates stay GG's job).
 
@@ -60,7 +60,7 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 
 ## Sonar APO control API (the actual routing/DSP engine)
 - With all GG processes stopped, music on the Media channel was STILL heard in the headset → the APO (Sonar.APO.dll in audiodg)
-  does routing itself using persisted settings; the Sonar app only configures it. CONFIRMED (user, 2026-10-18).
+  does routing itself using persisted settings; the Sonar app only configures it. CONFIRMED (heard it, 2026-10-18).
 - Control = in-proc COM server `Sonar.APOAPI.dll`: DllGetClassObject(CLSID DEA05346-7BE3-4DB0-AE9F-14423648EA7B) → IClassFactory
   → IBasicControl {40076C40-0E9C-4D14-9CF6-34839A766B8A}; `Initialize(repo)` with repo ∈ Game, ChatRender, Media, Aux, ChatCapture;
   `OpenStore` → IStore {1191FCBC-…} → `OpenSetting(ESetting)` → ISetting {A108D082-…} Get/Set Bool/Long/Float/String/arrays.
@@ -89,7 +89,7 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 ## End-to-end engine test (2026-10-18 16:07–16:37, GG fully stopped, src/AudioMixer.Cli run)
 - Routing all channels → headset, mic bridge → virtual mic (live signal), headset off/on reroute in ~150 ms. CONFIRMED.
 - ChatMix dial → APO gains, verified by reading back Game kSet_ChatMixGainLin = 0.835 at dial 91/100. CONFIRMED.
-- kSet_ChatMixGainLin also works on Media and Aux (Sonar never uses it there) → dial balances Chat vs Game+Media+Aux. CONFIRMED (user, YouTube Music on Media faded at full chat).
+- kSet_ChatMixGainLin also works on Media and Aux (Sonar never uses it there) → the dial could balance Chat vs Game+Media+Aux. CONFIRMED (YouTube Music on Media faded at full chat). Not used: AudioMixer keeps Sonar's Game vs Chat.
 - Per-app outputs are Windows' own per-app assignments (HKCU\…\Audio\PolicyConfig\PropertyStore); Sonar had pinned chrome.exe to Sonar Media.
 - Must reset ChatMixGainLin to 1 on exit — Sonar never resets Media/Aux, so a stale 0 silences them. (Router.Dispose does this.)
 

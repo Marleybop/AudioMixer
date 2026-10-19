@@ -28,8 +28,6 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     public Channel Channel { get; }
     public string Name { get; }
     public Brush Color { get; }
-    /// <summary>Whether this channel can be faded by ChatMix (everything but Chat itself and the mic).</summary>
-    public bool CanFade => Channel is Channel.Game or Channel.Media or Channel.Aux;
     public bool IsMic => Channel == Channel.Mic;
 
     /// <summary>Bar position 0–100.</summary>
@@ -38,11 +36,7 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     /// <summary>Live peak 0–100.</summary>
     [ObservableProperty] double _peak;
     [ObservableProperty] string _apps = "";
-    [ObservableProperty] bool _fadesWithChatMix;
     [ObservableProperty] string _eqText = "";
-
-    /// <summary>Raised when the user changes <see cref="FadesWithChatMix"/>.</summary>
-    public event EventHandler? FadeChanged;
 
     ChannelStripViewModel(Channel channel, string name, Func<float?> getGain, Action<float> setGain,
         Func<bool> getMute, Action<bool> setMute, Func<bool?> getEq, bool squareLaw)
@@ -95,13 +89,6 @@ public sealed partial class ChannelStripViewModel : ObservableObject
         }
     }
 
-    /// <summary>Sets <see cref="FadesWithChatMix"/> from config without raising <see cref="FadeChanged"/>.</summary>
-    public void LoadFade(bool fades)
-    {
-        _loading = true;
-        FadesWithChatMix = fades;
-        _loading = false;
-    }
 
     partial void OnVolumeChanged(double value)
     {
@@ -119,9 +106,4 @@ public sealed partial class ChannelStripViewModel : ObservableObject
         catch (Exception) { }
     }
 
-    partial void OnFadesWithChatMixChanged(bool value)
-    {
-        if (!_loading)
-            FadeChanged?.Invoke(this, EventArgs.Empty);
-    }
 }

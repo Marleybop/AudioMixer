@@ -138,18 +138,20 @@ public sealed class SonarEngine : IDisposable
     /// <summary>
     /// Applies a ChatMix balance in [-1, 1]: negative favours game, positive favours chat, 0 = both full.
     /// Same curve as Sonar: s = sign(b)·2b/(b+sign(b)); other = 1−s, chat = 1+s (each clamped to [0,1]).
-    /// Sonar only fades Game against Chat; <paramref name="fadedChannels"/> lets Media/Aux fade with Game too.
+    /// Like Sonar, only Game is balanced against Chat. Media and Aux are held at full gain, which also clears any
+    /// stale ChatMix gain left on them.
     /// </summary>
-    public void SetChatMixBalance(float balance, IReadOnlyCollection<Channel> fadedChannels)
+    public void SetChatMixBalance(float balance)
     {
-        var (otherGain, chatGain) = ChatMixGains(balance);
-        foreach (var channel in new[] { Channel.Game, Channel.Media, Channel.Aux })
-            SetFloat(channel, ApoSetting.ChatMixGainLin, fadedChannels.Contains(channel) ? otherGain : 1f);
+        var (gameGain, chatGain) = ChatMixGains(balance);
+        SetFloat(Channel.Game, ApoSetting.ChatMixGainLin, gameGain);
+        SetFloat(Channel.Media, ApoSetting.ChatMixGainLin, 1f);
+        SetFloat(Channel.Aux, ApoSetting.ChatMixGainLin, 1f);
         SetFloat(Channel.Chat, ApoSetting.CaptureChatMixGainLin, chatGain);
     }
 
-    /// <summary>The linear gains a ChatMix balance gives the faded channels and Chat (see <see cref="SetChatMixBalance"/>).</summary>
-    public static (float Other, float Chat) ChatMixGains(float balance)
+    /// <summary>The linear gains a ChatMix balance gives Game and Chat (see <see cref="SetChatMixBalance"/>).</summary>
+    public static (float Game, float Chat) ChatMixGains(float balance)
     {
         balance = Math.Clamp(balance, -1f, 1f);
         var scaled = Math.Abs(balance) < 0.001f ? 0f : Math.Sign(balance) * 2f * balance / (balance + Math.Sign(balance));

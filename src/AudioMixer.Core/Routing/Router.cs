@@ -229,7 +229,7 @@ public sealed class Router : IDisposable
             return;
         try
         {
-            _sonar.SetChatMixBalance(SonarEngine.BalanceFromDial(dial.Game, dial.Chat), _config.ChatMixFadedChannels);
+            _sonar.SetChatMixBalance(SonarEngine.BalanceFromDial(dial.Game, dial.Chat));
         }
         catch (Exception)
         {
@@ -256,7 +256,7 @@ public sealed class Router : IDisposable
             _micBridge?.Dispose();
             _micBridge = null;
             // Leave no channel attenuated once we stop managing ChatMix (Sonar never resets Media/Aux).
-            try { _sonar?.SetChatMixBalance(0, []); }
+            try { _sonar?.SetChatMixBalance(0); }
             catch (Exception) { }
         }
     }

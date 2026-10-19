@@ -24,11 +24,8 @@ public sealed class AppConfig
     /// <summary>Which virtual channel Windows' default playback device should be.</summary>
     public Channel DefaultPlaybackChannel { get; set; } = Channel.Game;
 
-    /// <summary>Use the base station dial to balance chat against the other channels.</summary>
+    /// <summary>Use the base station dial to balance Chat against Game.</summary>
     public bool ChatMixEnabled { get; set; } = true;
-
-    /// <summary>Channels that fade out as the dial moves toward chat (Sonar itself only fades Game).</summary>
-    public List<Channel> ChatMixFadedChannels { get; set; } = [Channel.Game, Channel.Media, Channel.Aux];
 
     /// <summary>Channel strips shown in the mixer, in order.</summary>
     public List<Channel> MixerChannels { get; set; } = [Channel.Game, Channel.Chat, Channel.Media, Channel.Mic];
