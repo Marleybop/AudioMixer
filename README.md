@@ -25,7 +25,7 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
 ## Requirements
 
 - Windows 10/11 x64, .NET 10.
-- SteelSeries GG **installed**. AudioMixer uses its signed Sonar driver and audio engine, so GG has to stay installed, but none of its apps need to run. AudioMixer can stop GG and turn off its autostart, and you can undo that in Settings.
+- SteelSeries GG **installed**. AudioMixer uses its signed Sonar driver and audio engine, so GG has to stay installed, but none of its apps need to run. AudioMixer can stop GG and turn off its autostart, and you can undo that in Settings. (I'm testing whether the driver can be kept after uninstalling GG; until then, keep GG installed.)
 - An Arctis Nova Pro Wireless (base station USB `1038:12E0`). Routing and channels also work without the headset settings.
 
 ## Build
@@ -36,7 +36,7 @@ dotnet build src/AudioMixer.slnx -c Release
 
 - `src/AudioMixer.Core`: headset protocol, Sonar engine control, routing, mic bridge, config.
 - `src/AudioMixer.App`: WPF tray app (`AudioMixer.exe`).
-- `src/AudioMixer.Cli`: test host (`list`, `status`, `run`, `watch`, …).
+- `src/AudioMixer.Cli`: test host (`list`, `status`, `run`, `watch`, `apo`, `sound`, `presets`, `driver-status`, `driver-restore`, …).
 - `notes/FINDINGS.md`: my notes on the base station protocol and the Sonar engine, with how sure I am of each.
 - `tools/make_icon.py`: draws the app icon (needs Pillow).
 
