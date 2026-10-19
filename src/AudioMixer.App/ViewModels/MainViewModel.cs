@@ -195,8 +195,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     partial void OnSelectedScreenImageChanged(string? value)
     {
-        if (_oled.LoadCustom(ScreenImagePath(value)) is { } error)
-            Toast(error, error: true);
+        _oled.LoadCustom(ScreenImagePath(value), error => Toast(error, error: true));
         QueueSave();
     }
 

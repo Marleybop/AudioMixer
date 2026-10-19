@@ -96,28 +96,51 @@ public sealed class OledWidget
                 return;
             _mode = value;
             _last = null;
-            UpdateAnimation();
+            RestartAnimation();
             if (value == ScreenMode.BaseStation && !_asleep)
                 Try(_headset.ShowBaseStationScreen);
             Refresh(force: true);
         }
     }
 
-    /// <summary>Loads a picture or GIF for <see cref="ScreenMode.Custom"/>; returns an error message, or null when it worked.</summary>
-    public string? LoadCustom(string? path)
+    int _loadVersion;
+
+    /// <summary>
+    /// Loads a picture or GIF for <see cref="ScreenMode.Custom"/> on a background thread (long GIFs take a moment to
+    /// decode), then plays it from the first frame. <paramref name="onError"/> gets a message if it can't be read.
+    /// </summary>
+    public void LoadCustom(string? path, Action<string>? onError = null)
     {
+        var version = ++_loadVersion;
         _custom = [];
-        _customIndex = 0;
-        string? error = null;
-        if (path is not null)
-        {
-            try { _custom = LoadImage(path); }
-            catch (Exception e) { error = $"Couldn't read {Path.GetFileName(path)}: {e.Message}"; }
-        }
         _last = null;
-        UpdateAnimation();
+        RestartAnimation();
         Refresh(force: true);
-        return error;
+        if (path is null)
+            return;
+        var ui = Dispatcher.CurrentDispatcher;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var frames = LoadImage(path);
+                ui.BeginInvoke(() =>
+                {
+                    if (version != _loadVersion)
+                        return; // something else was picked meanwhile
+                    _custom = frames;
+                    _last = null;
+                    RestartAnimation();
+                    Refresh(force: true);
+                });
+            }
+            catch (Exception e)
+            {
+                ui.BeginInvoke(() => onError?.Invoke($"Couldn't read {Path.GetFileName(path)}: {e.Message}"));
+            }
+        }) { IsBackground = true, Name = "Screen image loader" };
+        thread.SetApartmentState(ApartmentState.STA); // WPF imaging needs STA
+        thread.Start();
     }
 
     public void Update(WidgetState state)
@@ -153,13 +176,21 @@ public sealed class OledWidget
         {
             _asleep = asleep;
             _last = null;
-            UpdateAnimation();
+            RestartAnimation();
             SleepChanged?.Invoke(this, asleep);
             if (!asleep && _mode == ScreenMode.BaseStation)
                 Try(_headset.ShowBaseStationScreen);
         }
         if (_mode != ScreenMode.BaseStation || _asleep)
             Refresh(force: true);
+    }
+
+    /// <summary>Plays a GIF from its first frame (when it's picked, when the screen switches to it, or after sleep).</summary>
+    void RestartAnimation()
+    {
+        _customIndex = 0;
+        _animation.Stop();
+        UpdateAnimation();
     }
 
     void UpdateAnimation()
