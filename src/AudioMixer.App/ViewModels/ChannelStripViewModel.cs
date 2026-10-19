@@ -28,6 +28,7 @@ public sealed partial class ChannelStripViewModel : ObservableObject
     public string Name { get; }
     public Brush Color { get; }
     public bool IsMic => Channel == Channel.Mic;
+    public bool IsRemovable => MainViewModel.IsRemovable(Channel);
 
     /// <summary>Bar position 0–100.</summary>
     [ObservableProperty] double _volume;

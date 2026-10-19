@@ -131,6 +131,13 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 - Stream mix 0x47 = `[main, unused, aux, mic]`, each 0–100; in the 0x20 report at r[22], r[23] unused, r[24], r[25]. CONFIRMED (spec + live read `64 00 64 64`).
 - Firmware 0x10 = four 12-char ASCII fields (base DSP, base MCU, headset MCU, headset BT), e.g. `0000.003.082`. Mine: base 0.3.82 / 1.29.27, headset 1.22.11 / 1.15.4. CONFIRMED (live).
 - The base station echoes setting changes made on its own menu on the sync interface (report 0x07, same command byte; `31 band gain` for one custom EQ band). LIKELY (spec `translate_sync_data`).
+- OLED brightness 0 is refused: writing `06 85 00` leaves the stored value at 1 (range 1–10 is enforced). CONFIRMED (live, 2026-10-18).
+  idle_brightness (0x80 r[4]) has no write command in the spec.
+- There is no command to set the ChatMix position: 0x45 is only pushed by the base station, so software can follow the dial but not move it.
+  `0x49` (software ChatMix) on/off is what Sonar toggles; the app's ChatMix switch now sends it. CONFIRMED (spec).
+- Sonar's driver has exactly four playback channels (Game, Chat, Media, Aux) plus Mic, and a Stream pair for streamer mode. Aux and Stream
+  ship disabled in Windows; enabling/disabling an endpoint (PolicyConfig, no admin) is how channels are added/removed. More channels would need
+  another (signed) audio driver. CONFIRMED (live endpoint list).
 - The mic-muted light is drawn by the headset firmware using muted_mic_brightness; nothing in Sonar or GG drives it otherwise. CONFIRMED (spec + decomp search).
 - **Read-only** (headset buttons only; no write command in the spec): ANC/transparency mode and level, mic mute, Bluetooth power/link state, battery, volume, audio input (USB1/USB2/Xbox).
   Read: ux_settings also has idle_brightness and home_screen_mic_mute, but the spec has no separate write for them. CONFIRMED (spec).

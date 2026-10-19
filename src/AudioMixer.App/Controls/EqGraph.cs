@@ -55,7 +55,7 @@ public class EqGraph : FrameworkElement
     static readonly Brush LabelBrush = Frozen(Color.FromRgb(0x8A, 0x87, 0x7F));
     static readonly Brush BandCurveBrush = Frozen(Color.FromArgb(0x55, 0xA9, 0xA6, 0x9F));
     static readonly Brush NodeFill = Frozen(Color.FromRgb(0x14, 0x15, 0x18));
-    static readonly Typeface LabelFace = new("Cascadia Mono, Consolas");
+    static readonly Typeface LabelFace = new("Segoe UI Variable Text, Segoe UI");
 
     static Brush Frozen(Color c)
     {

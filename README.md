@@ -13,7 +13,8 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
   spatial audio, volume boost and smart volume on Game, Media and Aux; ClearCast AI noise cancelling, echo cancelling, noise reduction,
   noise gate and compressor on Chat and Mic. Sonar's preset library (and anything you saved in Sonar) shows up, and you can save your own.
 - **Each channel can play on its own device**, or follow your priority list.
-- **ChatMix:** the dial on the base station balances Game against Chat, the same as in Sonar.
+- **Add or remove channels:** Media and Aux can be added to or removed from the mixer, which also turns them on or off in Windows. Sonar's driver has four playback channels plus the mic, so that's the limit.
+- **ChatMix:** the dial on the base station balances Game against Chat, the same as in Sonar. The switch in the app turns ChatMix on or off on the base station.
 - **Device priority:** the headset is used while it's switched on. When you turn it off, audio moves to the next device in your list in about 150 ms.
 - **Blocklist:** keeps devices like a controller's speaker and mic disabled, so they can't take over as the default.
 - **Mic:** your headset mic goes to the virtual "Sonar - Microphone" that Discord and games record from, with its own volume and mute.

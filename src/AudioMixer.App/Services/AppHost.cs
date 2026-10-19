@@ -79,7 +79,7 @@ public sealed class AppHost : IDisposable
         try
         {
             Headset.SetSonarPresent(enabled);
-            Headset.SetSoftwareChatMix(enabled);
+            Headset.SetSoftwareChatMix(enabled && Config.ChatMixEnabled);
         }
         catch (Exception)
         {

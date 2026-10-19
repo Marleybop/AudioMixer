@@ -48,6 +48,9 @@ public sealed partial class ChannelSoundViewModel : ObservableObject
     public bool IsMic => Channel == Channel.Mic;
 
     public ObservableCollection<EqBandEditViewModel> Bands { get; } = [];
+
+    /// <summary>A short confirmation for the user (shown as a toast).</summary>
+    public event EventHandler<string>? Notice;
     [ObservableProperty] EqBandEditViewModel? _selectedBand;
 
     public ChannelSoundViewModel(Channel channel, string name, Brush color, ChannelConfig config, PresetStore store,
@@ -151,6 +154,7 @@ public sealed partial class ChannelSoundViewModel : ObservableObject
         if (preset is null)
             return;
         Load(preset.Settings.Clone(), preset.Name, modified: false);
+        Notice?.Invoke(this, $"{Name}: “{preset.Name}” applied");
     }
 
     [RelayCommand]
@@ -167,6 +171,7 @@ public sealed partial class ChannelSoundViewModel : ObservableObject
         RefreshPresets();
         RaisePreset();
         _save();
+        Notice?.Invoke(this, $"Saved “{name}”. It's in Your presets for every {(IsVoice ? "voice" : "playback")} channel.");
     }
 
     [RelayCommand]
@@ -176,10 +181,15 @@ public sealed partial class ChannelSoundViewModel : ObservableObject
             return;
         _store.Delete(preset.Name, Channel);
         RefreshPresets();
+        Notice?.Invoke(this, $"Deleted “{preset.Name}”");
     }
 
     [RelayCommand]
-    void ResetFlat() => Load(SoundSettings.Flat(Channel), "Flat", modified: false);
+    void ResetFlat()
+    {
+        Load(SoundSettings.Flat(Channel), "Flat", modified: false);
+        Notice?.Invoke(this, $"{Name} reset to Flat");
+    }
 
     /// <summary>Replaces the whole sound (a preset was picked).</summary>
     public void Load(SoundSettings settings, string presetName, bool modified)
