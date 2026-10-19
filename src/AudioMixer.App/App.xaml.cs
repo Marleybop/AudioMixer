@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -38,7 +37,7 @@ public partial class App : Application
         }
         if (e.Args.Contains("--install-sensors"))
         {
-            Shutdown(CpuTemperature.InstallTask(AppContext.BaseDirectory, Path.GetFileName(Environment.ProcessPath!), "--sensors") ? 0 : 1);
+            Shutdown(CpuTemperature.InstallTask(Environment.ProcessPath!, "--sensors") ? 0 : 1);
             return;
         }
         if (e.Args.Contains("--remove-sensors"))

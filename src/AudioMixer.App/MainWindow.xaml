@@ -1140,6 +1140,8 @@
                             <StackPanel>
                                 <TextBlock Text="About" Style="{StaticResource Heading}"/>
                                 <TextBlock Style="{StaticResource Hint}">
+                                    <Run Text="{x:Static vm:MainViewModel.AppVersion}" Foreground="{StaticResource Text}"/>
+                                    <LineBreak/>
                                     <Run Text="AudioMixer is open source and not affiliated with SteelSeries."/>
                                     <LineBreak/>
                                     <Hyperlink NavigateUri="https://github.com/Marleybop/AudioMixer" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">github.com/Marleybop/AudioMixer</Hyperlink>
