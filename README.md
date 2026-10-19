@@ -18,7 +18,15 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
 - **Device priority:** the headset is used while it's switched on. When you turn it off, audio moves to the next device in your list in about 150 ms.
 - **Blocklist:** keeps devices like a controller's speaker and mic disabled, so they can't take over as the default.
 - **Mic:** your headset mic goes to the virtual "Sonar - Microphone" that Discord and games record from, with its own volume and mute.
-- **Base station screen:** show AudioMixer's widget (headset and spare battery, a big mic live/muted, volume), your own pictures and animated GIFs (drop them in `%APPDATA%\AudioMixer\Screens`), or nothing, with a live preview in the app. The screen can also turn itself off after a while with no keyboard, mouse or dial use, handy if the PC stays on overnight.
+- **Base station screen:** pick what it shows, with a live preview in the app:
+  - its normal display, or off;
+  - AudioMixer's widget (headset and spare battery, a big mic live/muted, volume);
+  - **PC stats:** CPU and GPU load and temperature, RAM and VRAM;
+  - **weather** for your town, now and today, with falling snow and rain, fog, lightning or stars to match;
+  - all three taking turns;
+  - your own pictures and animated GIFs (drop them in `%APPDATA%\AudioMixer\Screens`).
+
+  The screen can also turn itself off after a while with no keyboard, mouse or dial use, handy if the PC stays on overnight.
 - **Headset settings:** base station EQ, sidetone, mic volume, line out and stream mix, screen and mute light brightness, Bluetooth, sleep timer, battery, firmware and status, all talking straight to the base station.
 - Runs from the tray, no admin rights needed.
 
@@ -28,6 +36,15 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
 - SteelSeries GG **installed**. AudioMixer uses its signed Sonar driver and audio engine, so GG has to stay installed, but none of its apps need to run. AudioMixer can stop GG and turn off its autostart, and you can undo that in Settings. (I'm testing whether the driver can be kept after uninstalling GG; until then, keep GG installed.)
 - An Arctis Nova Pro Wireless (base station USB `1038:12E0`). Routing and channels also work without the headset settings.
 
+## CPU temperature
+
+GPU temperature and load, CPU load and memory come from Windows itself and need nothing extra. The CPU temperature needs a kernel driver, so it's optional:
+
+1. Install the free [PawnIO](https://pawnio.eu/) driver. I don't bundle it.
+2. Turn on **Show the CPU temperature** on the Headset page and click Yes on the one admin prompt.
+
+That copies AudioMixer to `C:\Program Files\AudioMixer\Sensors` and adds a scheduled task, "AudioMixer Sensors", that runs that copy as administrator with `--sensors`. It reads the temperature with LibreHardwareMonitorLib and passes it to AudioMixer over a local pipe. AudioMixer starts it when it needs it, without another prompt, and it quits by itself 30 seconds after AudioMixer stops listening. The task runs the copy in Program Files, not the app in your own folders, because anything running as you can change files there, and the task would run them as administrator. After an update, turning the switch off and on again refreshes the copy. To remove it all, run `AudioMixer.exe --remove-sensors` (it asks for admin).
+
 ## Build
 
 ```
@@ -36,7 +53,7 @@ dotnet build src/AudioMixer.slnx -c Release
 
 - `src/AudioMixer.Core`: headset protocol, Sonar engine control, routing, mic bridge, config.
 - `src/AudioMixer.App`: WPF tray app (`AudioMixer.exe`).
-- `src/AudioMixer.Cli`: test host (`list`, `status`, `run`, `watch`, `apo`, `sound`, `presets`, `driver-status`, `driver-restore`, …).
+- `src/AudioMixer.Cli`: test host (`list`, `status`, `run`, `watch`, `apo`, `sound`, `presets`, `stats`, `weather <town>`, `cpu-temp`, `driver-status`, `driver-restore`, …).
 - `notes/FINDINGS.md`: my notes on the base station protocol and the Sonar engine, with how sure I am of each.
 - `tools/make_icon.py`: draws the app icon (needs Pillow).
 
@@ -51,3 +68,5 @@ This is an independent project. It isn't affiliated with, endorsed by, or suppor
 ## License
 
 [MIT](LICENSE)
+
+AudioMixer uses [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0) for the CPU temperature, unchanged from NuGet. Weather data is by [Open-Meteo.com](https://open-meteo.com/) under CC BY 4.0. Their free API is for non-commercial use, and AudioMixer asks it once every 15 minutes.
