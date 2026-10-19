@@ -345,7 +345,7 @@ public sealed class OledWidget
             height = Read(meta, "/logscrdesc/Height", height);
         }
         var canvas = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        foreach (var source in decoder.Frames.Take(600))
+        foreach (var source in decoder.Frames.Take(2000))
         {
             var delay = TimeSpan.FromMilliseconds(100);
             int left = 0, top = 0, disposal = 0;
