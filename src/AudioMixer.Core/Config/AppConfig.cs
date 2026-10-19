@@ -99,4 +99,7 @@ public sealed class HeadsetConfig
 {
     /// <summary>Notify when the headset battery drops to or below this percent (0 = off).</summary>
     public int LowBatteryWarningPercent { get; set; } = 25;
+
+    /// <summary>What the base station's screen shows: BaseStation (its own), Widget (AudioMixer's) or Off.</summary>
+    public string Screen { get; set; } = "BaseStation";
 }

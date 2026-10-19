@@ -131,6 +131,10 @@ Live (2026-10-18 15:10): ux_settings `06 80 01 01 01 01 00 01` → sonar_present
 - Stream mix 0x47 = `[main, unused, aux, mic]`, each 0–100; in the 0x20 report at r[22], r[23] unused, r[24], r[25]. CONFIRMED (spec + live read `64 00 64 64`).
 - Firmware 0x10 = four 12-char ASCII fields (base DSP, base MCU, headset MCU, headset BT), e.g. `0000.003.082`. Mine: base 0.3.82 / 1.29.27, headset 1.22.11 / 1.15.4. CONFIRMED (live).
 - The base station echoes setting changes made on its own menu on the sync interface (report 0x07, same command byte; `31 band gain` for one custom EQ band). LIKELY (spec `translate_sync_data`).
+- **Drawing on the OLED (0x93)** is a FEATURE report on the command interface (MI_04 Col01), 1024 bytes:
+  `06 93 x y width height` + pixels column by column, top to bottom, bit = column*height + row, lowest bit first; at most 64 columns per
+  report (a full 128×64 screen = two reports). The base station redraws its own UI on events (volume dial), so a widget is re-sent every second.
+  `06 95` gives the screen back. CONFIRMED (spec draw_bitmap; matches the open-source ggoled project; live test frame accepted 2026-10-18).
 - OLED brightness 0 is refused: writing `06 85 00` leaves the stored value at 1 (range 1–10 is enforced). CONFIRMED (live, 2026-10-18).
   idle_brightness (0x80 r[4]) has no write command in the spec.
 - There is no command to set the ChatMix position: 0x45 is only pushed by the base station, so software can follow the dial but not move it.

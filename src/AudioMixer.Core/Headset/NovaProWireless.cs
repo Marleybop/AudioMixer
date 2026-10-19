@@ -210,6 +210,37 @@ public sealed class NovaProWireless : IDisposable
         }
     }
 
+    /// <summary>Shows an image on the base station's screen until <see cref="ShowBaseStationScreen"/> (or its own UI redraws).</summary>
+    public void DrawOled(OledFrame frame)
+    {
+        lock (_writeLock)
+        {
+            var stream = _command ?? throw new InvalidOperationException("Base station not connected.");
+            var length = stream.Device.GetMaxFeatureReportLength();
+            try
+            {
+                foreach (var report in frame.ToReports())
+                {
+                    var buffer = new byte[Math.Max(length, report.Length)];
+                    report.CopyTo(buffer, 0);
+                    var wait = _lastWrite + MinCommandGap - DateTime.UtcNow;
+                    if (wait > TimeSpan.Zero)
+                        Thread.Sleep(wait);
+                    stream.SetFeature(buffer);
+                    _lastWrite = DateTime.UtcNow;
+                }
+            }
+            catch (IOException)
+            {
+                Disconnect();
+                throw;
+            }
+        }
+    }
+
+    /// <summary>Gives the screen back to the base station's own display.</summary>
+    public void ShowBaseStationScreen() => Send(NovaProProtocol.ReloadDisplay);
+
     // ---- Typed settings ----
 
     public void SetCustomEq(IReadOnlyList<double> bandsDb)

@@ -29,6 +29,7 @@ public sealed partial class MainViewModel : ObservableObject
     readonly DispatcherTimer _soundSave;
     readonly DispatcherTimer _toastTimer;
     readonly PresetStore _presets = new();
+    readonly OledWidget _oled;
     readonly List<ChannelStripViewModel> _allStrips = [];
     bool _loadingHeadset;
     bool _lowBatteryNotified;
@@ -46,6 +47,8 @@ public sealed partial class MainViewModel : ObservableObject
         // Base station changes are read back once things go quiet; if they took, they're stored in its flash.
         _flashDebounce = Debounce(1200, () => _ = VerifyAndSaveHeadsetAsync());
         _toastTimer = Debounce(2800, () => ToastVisible = false);
+        _oled = new OledWidget(host.Headset);
+        _oled.Rendered += (_, image) => OledPreview = image;
         _meterTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
         _meterTimer.Tick += (_, _) => UpdateMeters();
         _appsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -67,6 +70,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(ChannelStripViewModel.Muted))
             {
+                UpdateOled();
                 OnPropertyChanged(nameof(MicStatusText));
                 OnPropertyChanged(nameof(IsMicSilenced));
             }
@@ -113,7 +117,36 @@ public sealed partial class MainViewModel : ObservableObject
             _ = LoadHeadsetSettingsAsync();
         if (host.IsActive)
             ApplyAllSounds();
+        _screenMode = Enum.TryParse<ScreenMode>(host.Config.Headset.Screen, out var mode) ? mode : ScreenMode.BaseStation;
+        UpdateOled();
+        _oled.Mode = _screenMode;
     }
+
+    // ===== Base station screen =====
+
+    public static IReadOnlyList<Option> ScreenOptions { get; } =
+        [new(ScreenMode.BaseStation, "Base station's own"), new(ScreenMode.Widget, "AudioMixer widget"), new(ScreenMode.Off, "Off")];
+
+    [ObservableProperty] ScreenMode _screenMode;
+    [ObservableProperty] System.Windows.Media.ImageSource? _oledPreview;
+
+    partial void OnScreenModeChanged(ScreenMode value)
+    {
+        _oled.Mode = value;
+        QueueSave();
+        Toast(value switch
+        {
+            ScreenMode.Widget => "The base station now shows battery, mic and volume",
+            ScreenMode.Off => "The base station's screen is off while AudioMixer runs",
+            _ => "The base station shows its own screen again",
+        });
+    }
+
+    void UpdateOled() => _oled.Update(new WidgetState(HeadsetOn, HeadsetBattery, SpareBattery,
+        _status?.Charge == ChargeState.Charging, IsMicSilenced, HeadsetVolume, BaseAudioSettings.MaxVolume));
+
+    /// <summary>Hands the base station's screen back when AudioMixer quits.</summary>
+    public void Shutdown() => _oled.Release();
 
     // ===== Sound (EQ and effects) =====
 
@@ -269,6 +302,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnChargeTextChanged(string value) => RaiseSummary();
     partial void OnMicMutedChanged(bool value)
     {
+        UpdateOled();
         OnPropertyChanged(nameof(MicStatusText));
         OnPropertyChanged(nameof(IsMicSilenced));
     }
@@ -276,6 +310,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     void RaiseSummary()
     {
+        UpdateOled();
         OnPropertyChanged(nameof(HeadsetSummary));
         OnPropertyChanged(nameof(HeaderStatus));
         OnPropertyChanged(nameof(HeadsetStateText));
@@ -739,7 +774,11 @@ public sealed partial class MainViewModel : ObservableObject
         ];
     }
 
-    partial void OnHeadsetVolumeChanged(int value) => UpdateStatusRows();
+    partial void OnHeadsetVolumeChanged(int value)
+    {
+        UpdateStatusRows();
+        UpdateOled();
+    }
 
     /// <summary>Sends a setting to the base station unless the value came from the base station itself.</summary>
     void SendSetting(Action send)
@@ -926,7 +965,7 @@ public sealed partial class MainViewModel : ObservableObject
             DefaultPlaybackChannel = old.DefaultPlaybackChannel,
             ChatMixEnabled = ChatMixEnabled,
             MixerChannels = ChannelToggles.Where(t => t.IsShown).Select(t => t.Channel).ToList(),
-            Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning },
+            Headset = new HeadsetConfig { LowBatteryWarningPercent = LowBatteryWarning, Screen = ScreenMode.ToString() },
             Channels = old.Channels,
         };
         _host.SaveConfig(config);

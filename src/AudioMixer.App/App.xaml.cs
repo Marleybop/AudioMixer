@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -126,6 +126,7 @@ public partial class App : Application
     void Quit()
     {
         IsExiting = true;
+        _viewModel?.Shutdown();
         _window?.Close();
         _tray?.Dispose();
         _host?.Dispose();

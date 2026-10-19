@@ -70,6 +70,21 @@ switch (command)
             Console.WriteLine($"mute light = {HeadsetStatus.FromWirelessSettings(await headset.QueryAsync(NovaProProtocol.WirelessSettings)).MutedMicBrightness}");
         }
         break;
+    case "oled-test":
+        // oled-test: draw a border and a cross on the base station's screen for 3 s, then give the screen back
+        using (var headset = new NovaProWireless())
+        {
+            headset.TryConnect();
+            var frame = new OledFrame();
+            for (var x = 0; x < OledFrame.Width; x++) { frame[x, 0] = frame[x, OledFrame.Height - 1] = true; frame[x, x / 2] = frame[x, OledFrame.Height - 1 - x / 2] = true; }
+            for (var y = 0; y < OledFrame.Height; y++) frame[0, y] = frame[OledFrame.Width - 1, y] = true;
+            headset.DrawOled(frame);
+            Console.WriteLine("drawn");
+            await Task.Delay(3000);
+            headset.ShowBaseStationScreen();
+            Console.WriteLine("restored");
+        }
+        break;
     case "presets":
         foreach (var group in SonarPresets.Load().GroupBy(p => p.Channel))
             Console.WriteLine($"{group.Key}: {group.Count()} presets, selected: {string.Join(", ", group.Where(p => p.IsSelectedInSonar).Select(p => p.Name))}\n  "

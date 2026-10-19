@@ -18,6 +18,7 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
 - **Device priority:** the headset is used while it's switched on. When you turn it off, audio moves to the next device in your list in about 150 ms.
 - **Blocklist:** keeps devices like a controller's speaker and mic disabled, so they can't take over as the default.
 - **Mic:** your headset mic goes to the virtual "Sonar - Microphone" that Discord and games record from, with its own volume and mute.
+- **Base station screen widget:** the base station's screen can show AudioMixer's own widget (headset and spare battery, a big mic live/muted, volume) or be blanked, with a live preview in the app.
 - **Headset settings:** base station EQ, sidetone, mic volume, line out and stream mix, screen and mute light brightness, Bluetooth, sleep timer, battery, firmware and status, all talking straight to the base station.
 - Runs from the tray, no admin rights needed.
 

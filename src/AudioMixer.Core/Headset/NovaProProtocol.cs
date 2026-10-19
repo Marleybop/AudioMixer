@@ -34,7 +34,8 @@ public static class NovaProProtocol
     public const byte OledBrightness = 0x85;
     public const byte HomeScreenType = 0x89;
     public const byte SonarPresent = 0x8D;
-    public const byte ReloadDisplay = 0x95;
+    public const byte DrawBitmap = 0x93;    // feature report: draw an image on the OLED (see OledFrame)
+    public const byte ReloadDisplay = 0x95; // back to the base station's own screen
     public const byte BluetoothStartup = 0xB2;
     public const byte BluetoothCallMode = 0xB3;
     public const byte MutedMicBrightness = 0xBF;
@@ -63,7 +64,7 @@ public static class NovaProProtocol
     {
         FirmwareVersions, UniqueId, AudioSettings, UxSettings, WirelessSettings, BatteryStatus,
         SaveToFlash, HighGain, EqPreset, CustomEq, MicVolume, Sidetone, LineOutMode, StreamMix, SoftwareChatMix,
-        DimTimer, OledBrightness, HomeScreenType, SonarPresent, ReloadDisplay,
+        DimTimer, OledBrightness, HomeScreenType, SonarPresent, DrawBitmap, ReloadDisplay,
         BluetoothStartup, BluetoothCallMode, MutedMicBrightness, PowerInactivityTimer, WirelessMode,
     };
 
