@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using AudioMixer.App.Services;
 using AudioMixer.App.ViewModels;
+using AudioMixer.Core.Stats;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 
@@ -25,6 +27,25 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // The elevated CPU temperature reader, started by its scheduled task, and the one-time setup of that task.
+        // Both run without any window, next to the normal copy.
+        if (e.Args.Contains("--sensors"))
+        {
+            CpuTemperature.Serve(TimeSpan.FromSeconds(30));
+            Shutdown();
+            return;
+        }
+        if (e.Args.Contains("--install-sensors"))
+        {
+            Shutdown(CpuTemperature.InstallTask(AppContext.BaseDirectory, Path.GetFileName(Environment.ProcessPath!), "--sensors") ? 0 : 1);
+            return;
+        }
+        if (e.Args.Contains("--remove-sensors"))
+        {
+            Shutdown(CpuTemperature.RemoveTask() ? 0 : 1);
+            return;
+        }
 
         // One instance only; a second launch just brings the first one's window up.
         _singleInstance = new Mutex(true, SingleInstanceName, out var isFirst);

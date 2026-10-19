@@ -360,6 +360,68 @@
                 </Setter>
             </Style>
 
+            <!-- ===== Choices: a vertical pick-one list, each item a name and a hint (Value/Label/Hint) ===== -->
+            <Style x:Key="Choices" TargetType="ListBox">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="SelectedValuePath" Value="Value"/>
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBox">
+                            <Border Background="{StaticResource Well}" CornerRadius="10" Padding="4">
+                                <ItemsPresenter/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" FontSize="13"/>
+                                <TextBlock Text="{Binding Hint}" FontSize="11.5" FontWeight="Normal" Foreground="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,1,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemContainerStyle">
+                    <Setter.Value>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Foreground" Value="{StaticResource Subtle}"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="b" Padding="12,7" CornerRadius="8" Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+                                            <DockPanel>
+                                                <Border x:Name="dot" DockPanel.Dock="Left" Width="4" CornerRadius="2" Margin="-6,2,8,2" Background="Transparent"/>
+                                                <ContentPresenter/>
+                                            </DockPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="b" Property="Background" Value="{StaticResource PanelHi}"/>
+                                                <Setter TargetName="dot" Property="Background" Value="{StaticResource Accent}"/>
+                                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ===== Text box (Tag = placeholder) ===== -->
             <Style TargetType="TextBox">
                 <Setter Property="Foreground" Value="{StaticResource Text}"/>

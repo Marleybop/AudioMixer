@@ -984,10 +984,10 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Screen & lights -->
+                                <!-- Brightness & lights -->
                                 <Border Grid.Column="2" Style="{StaticResource Card}">
                                     <StackPanel>
-                                        <TextBlock Text="Screen &amp; lights" Style="{StaticResource Heading}"/>
+                                        <TextBlock Text="Brightness &amp; lights" Style="{StaticResource Heading}"/>
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding Brightness, StringFormat={}{0} / 10}"/>
                                             <TextBlock Text="Screen brightness" Style="{StaticResource Label}"/>
@@ -1002,32 +1002,97 @@
                                         <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TimerOptions}" SelectedValue="{Binding DimAfterMinutes}"/>
                                         <TextBlock Text="Home screen" Style="{StaticResource Label}" Margin="0,14,0,6"/>
                                         <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.HomeScreenOptions}" SelectedValue="{Binding SimpleHomeScreen}"/>
-                                        <TextBlock Text="The screen shows" Style="{StaticResource Label}" Margin="0,14,0,6"/>
-                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ScreenOptions}" SelectedValue="{Binding ScreenMode}"
-                                                 AutomationProperties.Name="What the base station screen shows"/>
-                                        <StackPanel Visibility="{Binding IsCustomScreen, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
-                                            <DockPanel>
-                                                <Button DockPanel.Dock="Right" Content="Open folder" Command="{Binding OpenScreensFolderCommand}" Margin="8,0,0,0"
-                                                        ToolTip="Put PNG, JPG, BMP or animated GIF files here; they're fitted to 128×64 in black and white"/>
-                                                <ComboBox ItemsSource="{Binding ScreenImages}" SelectedItem="{Binding SelectedScreenImage}" AutomationProperties.Name="Picture"/>
-                                            </DockPanel>
-                                            <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0"
-                                                       Text="Pictures and animated GIFs from your Screens folder. Bright parts light up; 128×64 black-and-white art looks best."/>
-                                        </StackPanel>
-                                        <Border Background="Black" CornerRadius="8" Padding="10" Margin="0,10,0,0" HorizontalAlignment="Left"
-                                                ToolTip="What the base station's screen shows">
-                                            <Image Source="{Binding OledPreview}" Width="256" Height="128" RenderOptions.BitmapScalingMode="NearestNeighbor"
-                                                   AutomationProperties.Name="Preview of the base station screen"/>
-                                        </Border>
-                                        <TextBlock Text="Turn the screen off when I'm away for" Style="{StaticResource Label}" Margin="0,14,0,6"/>
-                                        <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ScreenSleepOptions}" SelectedValue="{Binding ScreenSleepMinutes}"
-                                                 AutomationProperties.Name="Screen sleep"/>
-                                        <TextBlock Text="{Binding ScreenSleepText}" Style="{StaticResource Hint}" FontSize="12" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
-                                        <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,8,0,0"
-                                                   Text="Away means no keyboard, mouse or dial use on this PC. The widget, pictures, Off and sleep only work while AudioMixer is running. Turning the volume dial briefly shows the base station's own screen. The base station can't go below brightness 1, so Off draws a blank screen instead."/>
                                     </StackPanel>
                                 </Border>
                             </Grid>
+
+                            <!-- Base station screen -->
+                            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Base station screen" Style="{StaticResource Heading}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="260"/>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ListBox Style="{StaticResource Choices}" ItemsSource="{x:Static vm:MainViewModel.ScreenChoices}" SelectedValue="{Binding ScreenMode}"
+                                                 VerticalAlignment="Top" AutomationProperties.Name="What the base station screen shows"/>
+                                        <StackPanel Grid.Column="2">
+                                            <Border Background="Black" CornerRadius="8" Padding="10" HorizontalAlignment="Left"
+                                                    ToolTip="What the base station's screen shows">
+                                                <Image Source="{Binding OledPreview}" Width="256" Height="128" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                                       AutomationProperties.Name="Preview of the base station screen"/>
+                                            </Border>
+
+                                            <!-- Picture or animation -->
+                                            <StackPanel Visibility="{Binding IsCustomScreen, Converter={StaticResource BoolToVis}}" Margin="0,14,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                                <DockPanel>
+                                                    <Button DockPanel.Dock="Right" Content="Open folder" Command="{Binding OpenScreensFolderCommand}" Margin="8,0,0,0"
+                                                            ToolTip="Put PNG, JPG, BMP or animated GIF files here; they're fitted to 128×64 in black and white"/>
+                                                    <ComboBox ItemsSource="{Binding ScreenImages}" SelectedItem="{Binding SelectedScreenImage}" AutomationProperties.Name="Picture"/>
+                                                </DockPanel>
+                                                <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0"
+                                                           Text="Pictures and animated GIFs from your Screens folder. Bright parts light up; 128×64 black-and-white art looks best."/>
+                                            </StackPanel>
+
+                                            <!-- Stats -->
+                                            <StackPanel Visibility="{Binding ShowsStats, Converter={StaticResource BoolToVis}}" Margin="0,14,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                                <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="Show the CPU temperature" IsChecked="{Binding CpuTemperature}"/>
+                                                <TextBlock Text="{Binding CpuTemperatureStatus}" Style="{StaticResource Hint}" FontSize="12" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
+                                                <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,4,0,0">
+                                                    <Run Text="GPU load and temperature work as they are. The CPU temperature needs the free"/>
+                                                    <Hyperlink NavigateUri="https://pawnio.eu/" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">PawnIO</Hyperlink>
+                                                    <Run Text="driver, and one admin prompt to set up a small reader that only runs while AudioMixer uses it."/>
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <!-- Weather -->
+                                            <StackPanel Visibility="{Binding ShowsWeather, Converter={StaticResource BoolToVis}}" Margin="0,14,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Mono}" Text="{Binding WeatherPlace.Name, TargetNullValue='Not picked', FallbackValue='Not picked'}"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                                    <TextBlock Text="Town" Style="{StaticResource Label}"/>
+                                                </DockPanel>
+                                                <DockPanel Margin="0,6,0,0">
+                                                    <Button DockPanel.Dock="Right" Content="Find" Command="{Binding SearchWeatherCommand}" Margin="8,0,0,0" MinWidth="64"/>
+                                                    <TextBox Text="{Binding WeatherSearch, UpdateSourceTrigger=PropertyChanged}" Tag="Search for your town or city"
+                                                             AutomationProperties.Name="Search for a town">
+                                                        <TextBox.InputBindings>
+                                                            <KeyBinding Key="Return" Command="{Binding SearchWeatherCommand}"/>
+                                                        </TextBox.InputBindings>
+                                                    </TextBox>
+                                                </DockPanel>
+                                                <c:PlainItemsControl ItemsSource="{Binding WeatherResults}" Margin="0,6,0,0" Focusable="False"
+                                                                     Visibility="{Binding HasWeatherResults, Converter={StaticResource BoolToVis}}">
+                                                    <c:PlainItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Button Style="{StaticResource GhostButton}" HorizontalContentAlignment="Left" Content="{Binding Name}" Margin="0,1"
+                                                                    Command="{Binding DataContext.PickWeatherPlaceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                        </DataTemplate>
+                                                    </c:PlainItemsControl.ItemTemplate>
+                                                </c:PlainItemsControl>
+                                                <TextBlock Text="Units" Style="{StaticResource Label}" Margin="0,12,0,6"/>
+                                                <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.TemperatureUnitOptions}" SelectedValue="{Binding WeatherFahrenheit}"
+                                                         AutomationProperties.Name="Temperature units"/>
+                                                <CheckBox Style="{StaticResource Switch}" FontWeight="Normal" Content="Animate the weather" IsChecked="{Binding WeatherAnimated}" Margin="0,14,0,0"
+                                                          ToolTip="Falling snow and rain, drifting fog, lightning in a storm, stars on a clear night"/>
+                                                <TextBlock Text="{Binding WeatherStatus}" Style="{StaticResource Hint}" FontSize="12" Foreground="{StaticResource Accent}" Margin="0,8,0,0"/>
+                                                <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,4,0,0">
+                                                    <Hyperlink NavigateUri="https://open-meteo.com/" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">Weather data by Open-Meteo.com</Hyperlink>
+                                                    <Run Text="(free, no account). Updated every 15 minutes."/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="Turn the screen off when I'm away for" Style="{StaticResource Label}" Margin="0,18,0,6"/>
+                                    <ListBox Style="{StaticResource Options}" ItemsSource="{x:Static vm:MainViewModel.ScreenSleepOptions}" SelectedValue="{Binding ScreenSleepMinutes}"
+                                             AutomationProperties.Name="Screen sleep"/>
+                                    <TextBlock Text="{Binding ScreenSleepText}" Style="{StaticResource Hint}" FontSize="12" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
+                                    <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,8,0,0"
+                                               Text="Away means no keyboard, mouse or dial use on this PC. Everything except Normal display only works while AudioMixer is running. Turning the volume dial briefly shows the base station's own screen. The base station can't go below brightness 1, so Off draws a blank screen instead."/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AudioMixer.Core.Sonar;
+using AudioMixer.Core.Weather;
 
 namespace AudioMixer.Core.Config;
 
@@ -100,7 +101,7 @@ public sealed class HeadsetConfig
     /// <summary>Notify when the headset battery drops to or below this percent (0 = off).</summary>
     public int LowBatteryWarningPercent { get; set; } = 25;
 
-    /// <summary>What the base station's screen shows: BaseStation (its own), Widget (AudioMixer's) or Off.</summary>
+    /// <summary>What the base station's screen shows: BaseStation (its own), Off, Widget, Stats, Weather, Cycle or Custom.</summary>
     public string Screen { get; set; } = "BaseStation";
 
     /// <summary>The picture or GIF (file name in the Screens folder) shown when <see cref="Screen"/> is Custom.</summary>
@@ -108,4 +109,15 @@ public sealed class HeadsetConfig
 
     /// <summary>Blank the base station's screen after this many minutes without keyboard, mouse or dial use (0 = never).</summary>
     public int ScreenSleepMinutes { get; set; }
+
+    /// <summary>Where the weather page shows the weather for.</summary>
+    public WeatherPlace? WeatherPlace { get; set; }
+
+    public bool WeatherFahrenheit { get; set; }
+
+    /// <summary>Animate the weather page (snow, rain, fog, lightning, stars).</summary>
+    public bool WeatherAnimated { get; set; } = true;
+
+    /// <summary>Show the CPU temperature on the stats page (needs PawnIO and the elevated reader's task).</summary>
+    public bool CpuTemperature { get; set; }
 }

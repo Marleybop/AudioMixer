@@ -20,6 +20,12 @@ public enum ScreenMode
     Custom,
     /// <summary>A blank screen (the base station won't go below brightness 1).</summary>
     Off,
+    /// <summary>CPU and GPU load and temperatures, and memory.</summary>
+    Stats,
+    /// <summary>The weather where you are.</summary>
+    Weather,
+    /// <summary>Widget, stats and weather in turn.</summary>
+    Cycle,
 }
 
 /// <summary>The facts the widget shows.</summary>
@@ -33,12 +39,12 @@ public sealed record WidgetState(
     int VolumeMax);
 
 /// <summary>
-/// Draws on the base station's OLED: AudioMixer's widget, your own pictures and GIFs, or nothing. The base station
+/// Draws on the base station's OLED: AudioMixer's widget, PC stats, the weather, your own pictures and GIFs, or nothing. The base station
 /// redraws its own screen when something happens on it (e.g. the volume dial), so the image is sent again every
 /// second. The screen can also go to sleep (blank) after a while with no keyboard, mouse or dial use, and wakes
 /// on the next one. Static images move by a pixel now and then so nothing burns into the OLED.
 /// </summary>
-public sealed class OledWidget
+public sealed partial class OledWidget
 {
     static readonly FontFamily TextFont = new("Segoe UI Variable Display, Segoe UI");
     static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
@@ -79,6 +85,7 @@ public sealed class OledWidget
         _timer.Tick += (_, _) => Tick();
         _animation = new DispatcherTimer();
         _animation.Tick += (_, _) => NextCustomFrame();
+        _effectTimer.Tick += OnEffectTick;
         _timer.Start();
     }
 
@@ -100,6 +107,7 @@ public sealed class OledWidget
             if (value == ScreenMode.BaseStation && !_asleep)
                 Try(_headset.ShowBaseStationScreen);
             Refresh(force: true);
+            UpdateWeatherAnimation();
         }
     }
 
@@ -164,6 +172,7 @@ public sealed class OledWidget
     {
         _timer.Stop();
         _animation.Stop();
+        _effectTimer.Stop();
         if (_mode != ScreenMode.BaseStation || _asleep)
             Try(_headset.ShowBaseStationScreen);
     }
@@ -183,6 +192,7 @@ public sealed class OledWidget
         }
         if (_mode != ScreenMode.BaseStation || _asleep)
             Refresh(force: true);
+        UpdateWeatherAnimation(); // the page may have changed (Cycle) or the screen gone to sleep
     }
 
     /// <summary>Plays a GIF from its first frame (when it's picked, when the screen switches to it, or after sleep).</summary>
@@ -254,7 +264,11 @@ public sealed class OledWidget
             var frame = _custom[_customIndex].Frame;
             return _custom.Count == 1 ? Shifted(frame) : frame;
         }
-        return ToFrame(RenderWidget()); // widget, also previewed while the base station shows its own screen
+        var page = CurrentPage();
+        if (page == ScreenMode.Weather)
+            return WeatherFrame();
+        return ToFrame(Render(page == ScreenMode.Stats ? DrawStats
+            : dc => { if (_state is { } s) DrawWidget(dc, s); })); // the widget is also previewed while the base station shows its own screen
     }
 
     OledFrame Shifted(OledFrame frame)
@@ -283,7 +297,8 @@ public sealed class OledWidget
 
     // ---- The widget ----
 
-    BitmapSource RenderWidget()
+    /// <summary>Draws a page in white on black, moved by the burn-in shift.</summary>
+    BitmapSource Render(Action<DrawingContext> draw)
     {
         var visual = new DrawingVisual();
         TextOptions.SetTextRenderingMode(visual, TextRenderingMode.Aliased);
@@ -292,12 +307,9 @@ public sealed class OledWidget
         using (var dc = visual.RenderOpen())
         {
             dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, OledFrame.Width, OledFrame.Height));
-            if (_state is { } s)
-            {
-                dc.PushTransform(new TranslateTransform(_shift is 1 or 2 ? 1 : 0, _shift is 2 or 3 ? 1 : 0));
-                DrawWidget(dc, s);
-                dc.Pop();
-            }
+            dc.PushTransform(new TranslateTransform(_shift is 1 or 2 ? 1 : 0, _shift is 2 or 3 ? 1 : 0));
+            draw(dc);
+            dc.Pop();
         }
         var bitmap = new RenderTargetBitmap(OledFrame.Width, OledFrame.Height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);

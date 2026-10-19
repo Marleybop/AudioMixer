@@ -8,6 +8,8 @@ using AudioMixer.Core.Config;
 using AudioMixer.Core.Headset;
 using AudioMixer.Core.Routing;
 using AudioMixer.Core.Sonar;
+using AudioMixer.Core.Stats;
+using AudioMixer.Core.Weather;
 
 var command = args.FirstOrDefault() ?? "list";
 using var endpoints = new AudioEndpoints();
@@ -95,6 +97,50 @@ switch (command)
             : $"Sonar engine API: {engineError}");
         foreach (var e in endpoints.GetAll().Where(e => e.SonarChannel is not null || e.DisplayName.Contains("Sonar")))
             Console.WriteLine($"{e.Flow,-6} {e.State,-10} {e.DisplayName}");
+        break;
+    case "stats":
+        // stats [seconds]: CPU, GPU and memory as the base station's Stats screen sees them, once a second
+        using (var reader = new PcStatsReader())
+        {
+            var seconds = args.Length > 1 ? int.Parse(args[1]) : 5;
+            for (var i = 0; i <= seconds; i++)
+            {
+                var s = reader.Read();
+                if (i > 0)
+                    Console.WriteLine($"CPU {s.CpuLoad,5:0.0}% | {s.GpuName}: {s.GpuLoad,5:0.0}% {s.GpuTemp:0.0} °C VRAM {s.VramUsedGb:0.0}/{s.VramTotalGb:0.0} GB | RAM {s.RamUsedGb:0.0}/{s.RamTotalGb:0.0} GB");
+                await Task.Delay(1000);
+            }
+        }
+        break;
+    case "sensors-host":
+        // sensors-host: serve the CPU temperature on the pipe (run as administrator; AudioMixer.exe --sensors does the same)
+        CpuTemperature.Serve(TimeSpan.FromSeconds(30));
+        break;
+    case "cpu-temp":
+        // cpu-temp: read the CPU temperature from the elevated reader for 5 s (starts it through the task if set up)
+        using (var client = new CpuTemperatureClient())
+        {
+            Console.WriteLine($"task runs: {CpuTemperature.TaskCommand() ?? "(not set up)"}, PawnIO installed: {CpuTemperature.PawnIOInstalled}");
+            for (var i = 0; i < 5; i++)
+            {
+                await Task.Delay(1000);
+                Console.WriteLine($"connected {client.Connected}, CPU {client.Value:0.0} C");
+            }
+        }
+        break;
+    case "weather":
+        // weather <town> [F]: find the town and print its weather from Open-Meteo
+        {
+            var places = await OpenMeteo.SearchAsync(args[1]);
+            foreach (var p in places)
+                Console.WriteLine($"  {p.Name} ({p.Latitude:0.00}, {p.Longitude:0.00})");
+            if (places.Count > 0)
+            {
+                var w = await OpenMeteo.GetAsync(places[0], fahrenheit: args.Skip(2).FirstOrDefault() is "F" or "f");
+                Console.WriteLine($"{places[0].Name}: {w.Temperature:0}° (feels {w.FeelsLike:0}°) {w.Description}, high {w.High:0}° low {w.Low:0}°, "
+                    + $"rain {w.RainChance}%, wind {w.Wind:0}, {(w.IsDay ? "day" : "night")}");
+            }
+        }
         break;
     case "presets":
         foreach (var group in SonarPresets.Load().GroupBy(p => p.Channel))
