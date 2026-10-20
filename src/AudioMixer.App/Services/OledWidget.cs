@@ -24,7 +24,9 @@ public enum ScreenMode
     Stats,
     /// <summary>The weather where you are.</summary>
     Weather,
-    /// <summary>Widget, stats and weather in turn.</summary>
+    /// <summary>The time and date.</summary>
+    Clock,
+    /// <summary>Clock, widget, stats and weather in turn.</summary>
     Cycle,
 }
 
@@ -39,7 +41,7 @@ public sealed record WidgetState(
     int VolumeMax);
 
 /// <summary>
-/// Draws on the base station's OLED: AudioMixer's widget, PC stats, the weather, your own pictures and GIFs, or nothing. The base station
+/// Draws on the base station's OLED: AudioMixer's widget, PC stats, the weather, a clock, your own pictures and GIFs, or nothing. The base station
 /// redraws its own screen when something happens on it (e.g. the volume dial), so the image is sent again every
 /// second. The screen can also go to sleep (blank) after a while with no keyboard, mouse or dial use, and wakes
 /// on the next one. Static images move by a pixel now and then so nothing burns into the OLED.
@@ -192,6 +194,10 @@ public sealed partial class OledWidget
         }
         if (_mode != ScreenMode.BaseStation || _asleep)
             Refresh(force: true);
+        // On the clock, tick just after each second starts so the seconds don't lag or skip.
+        _timer.Interval = CurrentPage() == ScreenMode.Clock && !_asleep
+            ? TimeSpan.FromMilliseconds(1015 - DateTime.Now.Millisecond)
+            : TimeSpan.FromSeconds(1);
         UpdateWeatherAnimation(); // the page may have changed (Cycle) or the screen gone to sleep
     }
 
@@ -267,8 +273,12 @@ public sealed partial class OledWidget
         var page = CurrentPage();
         if (page == ScreenMode.Weather)
             return WeatherFrame();
-        return ToFrame(Render(page == ScreenMode.Stats ? DrawStats
-            : dc => { if (_state is { } s) DrawWidget(dc, s); })); // the widget is also previewed while the base station shows its own screen
+        return ToFrame(Render(page switch
+        {
+            ScreenMode.Stats => DrawStats,
+            ScreenMode.Clock => DrawClock,
+            _ => dc => { if (_state is { } s) DrawWidget(dc, s); },
+        })); // the widget is also previewed while the base station shows its own screen
     }
 
     OledFrame Shifted(OledFrame frame)

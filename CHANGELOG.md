@@ -3,6 +3,20 @@
 What changed in each release of AudioMixer. Versions follow [semantic versioning](https://semver.org/); while it's 0.x, a minor
 version can change how things work.
 
+## [Unreleased]
+
+### Added
+- **Clock** for the base station screen: the time and date, 12- or 24-hour (or as Windows is set), with seconds if you want them. It
+  also takes a turn in "Take turns".
+
+### Fixed
+- Nothing was routed through AudioMixer after GG was quit from its tray icon: GG turns all of Sonar's devices off in Windows when
+  it quits that way, and AudioMixer only used devices that were already on. It now turns Game, Chat, Mic (and Media and Aux while
+  they're in the mixer) back on by itself.
+- Setting up the CPU temperature reader again (e.g. after updating AudioMixer) could crash and leave the reader broken, because
+  AudioMixer restarted the old reader while its files were being replaced. Setup now pauses the reader's task first, and reports a
+  failure instead of crashing.
+
 ## [0.1.0] - 2026-10-19
 
 The first release: everything I use day to day in place of the GG and Sonar apps, on my Arctis Nova Pro Wireless.

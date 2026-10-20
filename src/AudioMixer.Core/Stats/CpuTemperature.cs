@@ -176,31 +176,43 @@ public static class CpuTemperature
 
     /// <summary>
     /// Copies the app at <paramref name="exePath"/> to <see cref="InstallFolder"/> and sets up the task that runs
-    /// that copy elevated with <paramref name="arguments"/>, on demand only. Run as administrator.
+    /// that copy elevated with <paramref name="arguments"/>, on demand only. Run as administrator. False if it couldn't.
     /// </summary>
     public static bool InstallTask(string exePath, string arguments)
     {
-        Schtasks($"/End /TN \"{TaskName}\""); // a running reader holds its files
-        var folder = Path.GetDirectoryName(exePath)!;
-        for (var attempt = 0; ; attempt++)
+        try
         {
-            try
+            StopReader();
+            var folder = Path.GetDirectoryName(exePath)!;
+            for (var attempt = 0; ; attempt++)
             {
-                if (Directory.Exists(InstallFolder))
-                    Directory.Delete(InstallFolder, recursive: true);
-                foreach (var source in AppFiles(exePath))
+                try
                 {
-                    var target = Path.Combine(InstallFolder, Path.GetRelativePath(folder, source));
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    File.Copy(source, target);
+                    if (Directory.Exists(InstallFolder))
+                        Directory.Delete(InstallFolder, recursive: true);
+                    foreach (var source in AppFiles(exePath))
+                    {
+                        var target = Path.Combine(InstallFolder, Path.GetRelativePath(folder, source));
+                        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                        File.Copy(source, target);
+                    }
+                    break;
                 }
-                break;
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < 10)
+                {
+                    Thread.Sleep(500); // the old reader is still closing (its files stay locked until it has)
+                }
             }
-            catch (IOException) when (attempt < 10)
-            {
-                Thread.Sleep(500); // the old reader is still closing
-            }
+            return CreateTask(exePath, arguments);
         }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    static bool CreateTask(string exePath, string arguments)
+    {
         var xml = $"""
             <?xml version="1.0" encoding="UTF-16"?>
             <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -239,14 +251,39 @@ public static class CpuTemperature
     /// <summary>Removes the task and its copy of the app. Run as administrator.</summary>
     public static bool RemoveTask()
     {
-        Schtasks($"/End /TN \"{TaskName}\"");
+        StopReader();
         var removed = Schtasks($"/Delete /TN \"{TaskName}\" /F").Code == 0;
         for (var attempt = 0; attempt < 10 && Directory.Exists(InstallFolder); attempt++)
         {
             try { Directory.Delete(InstallFolder, recursive: true); }
-            catch (IOException) { Thread.Sleep(500); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Thread.Sleep(500); }
         }
         return removed;
+    }
+
+    /// <summary>
+    /// Stops the reader so its files can be replaced: disables the task first, or a running AudioMixer would start it
+    /// again within seconds, then ends it and anything still running from <see cref="InstallFolder"/>.
+    /// </summary>
+    static void StopReader()
+    {
+        Schtasks($"/Change /TN \"{TaskName}\" /Disable");
+        Schtasks($"/End /TN \"{TaskName}\"");
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                try
+                {
+                    var path = process.MainModule?.FileName;
+                    if (path is null || !path.StartsWith(InstallFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+                catch (Exception) { } // processes we can't open (system, other users) aren't ours
+            }
+        }
     }
 
     /// <summary>Starts the elevated reader through the task (no prompt).</summary>

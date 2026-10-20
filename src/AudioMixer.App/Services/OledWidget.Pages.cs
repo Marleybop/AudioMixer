@@ -9,7 +9,7 @@ using AudioMixer.Core.Weather;
 
 namespace AudioMixer.App.Services;
 
-/// <summary>The stats and weather pages, and the cycle between them and the widget.</summary>
+/// <summary>The stats, weather and clock pages, and the cycle between them and the widget.</summary>
 public sealed partial class OledWidget
 {
     /// <summary>How long each page shows in <see cref="ScreenMode.Cycle"/>.</summary>
@@ -25,6 +25,22 @@ public sealed partial class OledWidget
     (WeatherReport?, string?, string?, int) _weatherBaseKey;
     OledFrame? _weatherBase;
     bool _animateWeather = true;
+    bool? _clock24Hour;
+    bool _clockSeconds;
+
+    /// <summary>24-hour clock (true), 12-hour (false), or as Windows is set (null).</summary>
+    public bool? Clock24Hour
+    {
+        get => _clock24Hour;
+        set { _clock24Hour = value; Refresh(force: true); }
+    }
+
+    /// <summary>Show the seconds on the clock.</summary>
+    public bool ClockSeconds
+    {
+        get => _clockSeconds;
+        set { _clockSeconds = value; Refresh(force: true); }
+    }
 
     /// <summary>Animate the weather page: snow, rain, fog, lightning, stars.</summary>
     public bool AnimateWeather
@@ -97,7 +113,9 @@ public sealed partial class OledWidget
     {
         if (_mode != ScreenMode.Cycle)
             return _mode;
-        ScreenMode[] pages = _weatherPlace is null ? [ScreenMode.Widget, ScreenMode.Stats] : [ScreenMode.Widget, ScreenMode.Stats, ScreenMode.Weather];
+        ScreenMode[] pages = _weatherPlace is null
+            ? [ScreenMode.Clock, ScreenMode.Widget, ScreenMode.Stats]
+            : [ScreenMode.Clock, ScreenMode.Widget, ScreenMode.Stats, ScreenMode.Weather];
         var slot = (long)(DateTime.UtcNow.Ticks / CycleTime.Ticks);
         return pages[(int)(slot % pages.Length)];
     }
@@ -138,6 +156,37 @@ public sealed partial class OledWidget
         var fill = Math.Clamp(load ?? 0, 0, 100) / 100 * 125;
         if (fill >= 1)
             dc.DrawRectangle(Brushes.White, null, new Rect(1, y + 18, fill, 2));
+    }
+
+    // ---- Clock ----
+
+    /// <summary>The time, large and centred, with AM/PM and the seconds in a small column beside it, and the date under it.</summary>
+    void DrawClock(DrawingContext dc)
+    {
+        var now = DateTime.Now;
+        var culture = CultureInfo.CurrentCulture;
+        var h24 = _clock24Hour ?? culture.DateTimeFormat.ShortTimePattern.Contains('H');
+        var time = now.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.InvariantCulture);
+        var ampm = h24 ? "" : now.Hour < 12 ? "AM" : "PM";
+        var seconds = _clockSeconds ? now.ToString("ss", CultureInfo.InvariantCulture) : "";
+
+        const double big = 42, small = 12;
+        var side = Math.Max(Width(ampm, Bold, small), Width(seconds, Bold, small));
+        var total = Width(time, Bold, big) + (side > 0 ? side + 3 : 0);
+        var x = Math.Round((128 - total) / 2);
+        Text(dc, time, Bold, big, x, -9);
+        var sx = x + Width(time, Bold, big) + 3;
+        if (ampm != "")
+            Text(dc, ampm, Bold, small, sx, 4);
+        if (seconds != "")
+            Text(dc, seconds, Bold, small, sx, ampm == "" ? 23 : 21);
+
+        // "Sunday, October 19" (or "Sunday, 19 October": the month and day as Windows writes them), shortened if it won't fit.
+        var monthDay = now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
+        var date = $"{now.ToString("dddd", culture)}, {monthDay}";
+        if (Width(date, Semi, 13) > 126)
+            date = $"{now.ToString("ddd", culture)}, {monthDay}";
+        Text(dc, date, Semi, 13, Math.Round((128 - Width(date, Semi, 13)) / 2), 45);
     }
 
     // ---- Weather ----

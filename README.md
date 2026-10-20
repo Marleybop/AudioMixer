@@ -23,7 +23,8 @@ GG and Sonar use over a gigabyte of RAM between them and kept falling over on me
   - AudioMixer's widget (headset and spare battery, a big mic live/muted, volume);
   - **PC stats:** CPU and GPU load and temperature, RAM and VRAM;
   - **weather** for your town, now and today, with falling snow and rain, fog, lightning or stars to match;
-  - all three taking turns;
+  - a **clock** with the date (12- or 24-hour, seconds if you like);
+  - the clock, widget, stats and weather taking turns;
   - your own pictures and animated GIFs (drop them in `%APPDATA%\AudioMixer\Screens`).
 
   The screen can also turn itself off after a while with no keyboard, mouse or dial use, handy if the PC stays on overnight.

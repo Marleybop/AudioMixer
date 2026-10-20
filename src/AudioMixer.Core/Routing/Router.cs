@@ -93,6 +93,8 @@ public sealed class Router : IDisposable
             var headset = _headset?.Status;
 
             EnforceBlocklist(all, problems);
+            if (_sonar is not null && EnableSonarEndpoints(all, problems))
+                all = _endpoints.GetAll();
 
             var output = FirstAvailable(_config.OutputPriority, all, EndpointFlow.Output, headset);
             var input = Pinned(Channel.Mic, all, EndpointFlow.Input, headset)
@@ -150,6 +152,31 @@ public sealed class Router : IDisposable
                 problems.Add($"Couldn't disable blocked device {endpoint.DisplayName}: {e.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Turns Sonar's devices back on in Windows if something turned them off: GG disables them all when it's quit
+    /// from its tray icon (killing it leaves them alone), which would leave nothing to route through. Media and Aux
+    /// only while they're in the mixer, since removing them from the mixer turns them off on purpose.
+    /// True if anything was turned on.
+    /// </summary>
+    bool EnableSonarEndpoints(IReadOnlyList<AudioEndpoint> all, List<string> problems)
+    {
+        var enabled = false;
+        foreach (var endpoint in all.Where(e => e.State == EndpointState.Disabled && e.SonarChannel is { } c && !IsBlocked(e)
+                                                && (c is Channel.Game or Channel.Chat or Channel.Mic || _config.MixerChannels.Contains(c))))
+        {
+            try
+            {
+                PolicyConfig.SetEnabled(endpoint.Id, true);
+                enabled = true;
+            }
+            catch (Exception e)
+            {
+                problems.Add($"Couldn't turn on {endpoint.DisplayName}: {e.Message}");
+            }
+        }
+        return enabled;
     }
 
     static AudioEndpoint? SonarEndpoint(IReadOnlyList<AudioEndpoint> all, Channel channel, EndpointFlow flow) =>
