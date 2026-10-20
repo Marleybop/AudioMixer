@@ -10,6 +10,9 @@ version can change how things work.
   also takes a turn in "Take turns".
 
 ### Fixed
+- Nothing was routed through AudioMixer after GG was quit from its tray icon: GG turns all of Sonar's devices off in Windows when
+  it quits that way, and AudioMixer only used devices that were already on. It now turns Game, Chat, Mic (and Media and Aux while
+  they're in the mixer) back on by itself.
 - Setting up the CPU temperature reader again (e.g. after updating AudioMixer) could crash and leave the reader broken, because
   AudioMixer restarted the old reader while its files were being replaced. Setup now pauses the reader's task first, and reports a
   failure instead of crashing.
